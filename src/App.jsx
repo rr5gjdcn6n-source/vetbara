@@ -253,6 +253,7 @@ export default function VetBaraPrototype() {
   const [sync, setSync] = useState([{ id: "S-001", type: "Exam package", status: "Ready offline" }]);
   const [scannerMode, setScannerMode] = useState(null);
   const [lastEvaluation, setLastEvaluation] = useState(null);
+  const [authenticatedPortalRole, setAuthenticatedPortalRole] = useState(null);
 
   const selectedCandidate = candidates.find((c) => c.id === selectedCandidateId) ?? candidates[0];
   const loggedCandidate = candidates.find((c) => c.id === loggedCandidateId) ?? null;
@@ -265,6 +266,7 @@ export default function VetBaraPrototype() {
   const queue = (type, detail = "") => setSync((prev) => [{ id: `S-${prev.length + 1}`, type, detail, status: "Pending sync" }, ...prev]);
   const payload = (roleName, id, token = `VETBARA-${roleName.toUpperCase()}-${id}-2026`) => `${window.location.origin}${window.location.pathname}?role=${encodeURIComponent(roleName)}&id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`;
   const sectionTone = (v) => v === "closed" ? "good" : v === "open" ? "warn" : "default";
+  const lockedPortalRole = portalRole ?? authenticatedPortalRole;
   const knownCandidate = (id) => candidates.some((candidate) => candidate.id === id);
   const knownExaminer = (id) => EXAMINERS.some((examiner) => examiner.id === id);
 
@@ -317,12 +319,13 @@ export default function VetBaraPrototype() {
       const session = await bootstrapSession(resolved.sessionToken);
       return { ...resolved, ...session, sessionToken: resolved.sessionToken };
     } catch (error) {
+      console.error("Session bootstrap failed; using local demo fallback when available", error);
       const fallback = demoAccess(parsed);
       if (fallback) {
-        addAudit("Backend unavailable", fallback.subjectId ?? fallback.role, `${detail}; demo fallback used`);
+        addAudit("Backend unavailable", fallback.subjectId ?? fallback.role, `${detail}; local demo fallback used`);
         return fallback;
       }
-      addAudit("QR resolve failed", parsed.id ?? "Unknown QR", error.message);
+      addAudit("QR resolve failed", parsed.id ?? "Unknown QR", "The QR code could not be verified.");
       return null;
     }
   }
@@ -335,6 +338,8 @@ export default function VetBaraPrototype() {
   }
 
   function applyResolvedAccess(access, detail) {
+    setAuthenticatedPortalRole(access.role);
+
     if (access.role === "Centre") {
       setCentreUnlocked(true);
       setRole("Centre");
@@ -396,7 +401,7 @@ export default function VetBaraPrototype() {
   function generateEvaluation() { const s = scoreCandidate(selectedCandidate); setLastEvaluation({ candidate: selectedCandidate.name, level: selectedCandidate.level, total: s.total, max: s.max, percentage: s.percentage, result: s.pass ? "PASS" : "NOT PASSED" }); }
 
   return <main className="min-h-screen bg-slate-50 p-4 text-slate-900 md:p-8"><div className="mx-auto max-w-7xl">
-    <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><div className="mb-2 flex flex-wrap items-center gap-2"><div className="rounded-2xl bg-slate-950 px-3 py-1 text-sm font-semibold text-white">VetBara</div><StatusPill tone="warn">MVP prototype</StatusPill><StatusPill><CloudOff className="mr-1 h-3.5 w-3.5" /> offline-first</StatusPill></div><h1 className="text-3xl font-bold tracking-tight md:text-5xl">Digital VETcert examination system</h1><p className="mt-2 max-w-3xl text-slate-600">Admin sets the exam, centre configures candidates and examiners, candidates and examiners log in by QR on tablets.</p></div><div className="flex flex-wrap gap-2">{portalRole ? <StatusPill tone="good">Dedicated {portalRole} portal</StatusPill> : ROLES.map((r) => <Button key={r} onClick={() => setRole(r)} variant={role === r ? "default" : "outline"} className="rounded-2xl">{r}</Button>)}</div></header>
+    <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><div className="mb-2 flex flex-wrap items-center gap-2"><div className="rounded-2xl bg-slate-950 px-3 py-1 text-sm font-semibold text-white">VetBara</div><StatusPill tone="warn">MVP prototype</StatusPill><StatusPill><CloudOff className="mr-1 h-3.5 w-3.5" /> offline-first</StatusPill></div><h1 className="text-3xl font-bold tracking-tight md:text-5xl">Digital VETcert examination system</h1><p className="mt-2 max-w-3xl text-slate-600">Admin sets the exam, centre configures candidates and examiners, candidates and examiners log in by QR on tablets.</p></div><div className="flex flex-wrap gap-2">{lockedPortalRole ? <StatusPill tone="good">Dedicated {lockedPortalRole} portal</StatusPill> : ROLES.map((r) => <Button key={r} onClick={() => setRole(r)} variant={role === r ? "default" : "outline"} className="rounded-2xl">{r}</Button>)}</div></header>
     <Card className="mb-4 rounded-2xl shadow-sm"><CardContent className="p-5"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><div className="text-sm font-medium text-slate-500">Current workspace</div><div className="text-2xl font-bold tracking-tight">{role}</div></div><div className="flex flex-wrap gap-2"><StatusPill>{status}</StatusPill><StatusPill>{summary.total} candidates</StatusPill><StatusPill>{summary.practicing} Practicing</StatusPill><StatusPill>{summary.consulting} Consulting</StatusPill></div></div></CardContent></Card>
     <div className="grid gap-4 lg:grid-cols-3">
       {role === "Admin" && <AdminView centre={centre} setCentre={setCentre} examDate={examDate} setExamDate={setExamDate} place={place} setPlace={setPlace} language={language} setLanguage={setLanguage} setStatus={setStatus} addAudit={addAudit} setScannerMode={setScannerMode} centreQr={payload("Centre", centre, CENTRE_ACCESS_TOKEN)} />}
