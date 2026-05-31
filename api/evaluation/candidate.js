@@ -153,66 +153,38 @@ function buildReportDraft(events) {
   }, createReportDraft());
 }
 
-async function readReportEvents(candidateId) {
-  if (!envReady()) return [];
-  const types = encodeURIComponent("report_draft.saved,report_photo.added");
-  return supabase(`sync_events?candidate_id=eq.${encodeURIComponent(candidateId)}&event_type=in.(${types})&select=*&order=created_at.asc`);
+function hasText(value) {
+  return String(value ?? "").trim().length > 0;
 }
 
-function createReportDraft() {
+function treeHasReportContent(tree) {
+  const finalSections = tree?.finalSections && typeof tree.finalSections === "object" ? tree.finalSections : {};
+  const photos = Array.isArray(tree?.photos) ? tree.photos : [];
+  return hasText(tree?.fieldNotes) || Object.values(finalSections).some(hasText) || photos.length > 0;
+}
+
+function buildReportSummary(reportDraft, reportEvents, sections) {
+  const trees = Object.values(reportDraft ?? {});
+  const fieldNotesFilled = trees.filter((tree) => hasText(tree?.fieldNotes)).length;
+  const finalSectionsFilled = trees.reduce((total, tree) => {
+    const finalSections = tree?.finalSections && typeof tree.finalSections === "object" ? tree.finalSections : {};
+    return total + Object.values(finalSections).filter(hasText).length;
+  }, 0);
+  const photoPlaceholdersTotal = trees.reduce((total, tree) => total + (Array.isArray(tree?.photos) ? tree.photos.length : 0), 0);
+  const isSubmitted = sections.some((section) => {
+    const sectionKey = section.section_key ?? section.sectionKey;
+    return sectionKey === "report" && ["closed", "submitted"].includes(section.status);
+  });
+
   return {
-    "Tree A": { fieldNotes: "", photos: [], finalSections: {} },
-    "Tree B": { fieldNotes: "", photos: [], finalSections: {} },
+    hasReportDraft: Boolean((reportEvents ?? []).length || fieldNotesFilled || finalSectionsFilled || photoPlaceholdersTotal),
+    treesTotal: trees.length,
+    treesWithContent: trees.filter(treeHasReportContent).length,
+    fieldNotesFilled,
+    finalSectionsFilled,
+    photoPlaceholdersTotal,
+    isSubmitted,
   };
-}
-
-function buildReportDraft(events) {
-  return events.reduce((draft, event) => {
-    const payload = event.payload ?? {};
-    const treeId = payload.treeId || payload.tree || "Tree A";
-
-    if (!draft[treeId]) {
-      draft[treeId] = { fieldNotes: "", photos: [], finalSections: {} };
-    }
-
-    if (event.event_type === "report_draft.saved") {
-      const fieldKey = payload.fieldKey || payload.key;
-      const fieldType = payload.fieldType || "finalSection";
-      if (!fieldKey) return draft;
-
-      if (fieldType === "fieldNotes" || fieldKey === "fieldNotes") {
-        draft[treeId] = { ...draft[treeId], fieldNotes: payload.value ?? "" };
-      } else {
-        draft[treeId] = {
-          ...draft[treeId],
-          finalSections: {
-            ...(draft[treeId].finalSections ?? {}),
-            [fieldKey]: payload.value ?? "",
-          },
-        };
-      }
-    }
-
-    if (event.event_type === "report_photo.added") {
-      const photoId = payload.photoId || payload.id;
-      if (!photoId) return draft;
-      const existing = draft[treeId].photos ?? [];
-      if (existing.some((photo) => photo.id === photoId)) return draft;
-      draft[treeId] = {
-        ...draft[treeId],
-        photos: [
-          ...existing,
-          {
-            id: photoId,
-            caption: payload.caption || `${treeId} candidate photo ${existing.length + 1}`,
-            capturedAt: payload.capturedAt || event.created_at || null,
-          },
-        ],
-      };
-    }
-
-    return draft;
-  }, createReportDraft());
 }
 
 function scoreMode(score) {
@@ -253,15 +225,16 @@ export default async function handler(request, response) {
     if (!session) return sendJson(response, 401, { error: "Invalid or expired session" });
     if (!canReadCandidate(session, candidateId)) return sendJson(response, 403, { error: "Candidate is outside this session scope" });
 
-  const [sections, testResponses, outdoorAssessments, outdoorScores, reportEvents] = await Promise.all([
-  readRows("candidate_sections", candidateId),
-  readRows("test_responses", candidateId),
-  readRows("outdoor_assessments", candidateId),
-  readRows("outdoor_scores", candidateId),
-  readReportEvents(candidateId),
-]);
+    const [sections, testResponses, outdoorAssessments, outdoorScores, reportEvents] = await Promise.all([
+      readRows("candidate_sections", candidateId),
+      readRows("test_responses", candidateId),
+      readRows("outdoor_assessments", candidateId),
+      readRows("outdoor_scores", candidateId),
+      readReportEvents(candidateId),
+    ]);
 
-const reportDraft = buildReportDraft(reportEvents);
+    const reportDraft = buildReportDraft(reportEvents);
+    const reportSummary = buildReportSummary(reportDraft, reportEvents, sections);
 
     return sendJson(response, 200, {
       ok: true,
@@ -272,9 +245,10 @@ const reportDraft = buildReportDraft(reportEvents);
       testResponses,
       outdoorAssessments,
       outdoorScores,
-reportEvents,
-reportDraft,
-summary: buildSummary(sections, testResponses, outdoorScores),
+      reportEvents,
+      reportDraft,
+      reportSummary,
+      summary: buildSummary(sections, testResponses, outdoorScores),
     });
   } catch (error) {
     console.error("Candidate evaluation read model failed", error);

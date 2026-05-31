@@ -1180,8 +1180,108 @@ function EvaluationPreviewCard({ preview }) {
   const summary = preview?.summary ?? {};
   const sections = preview?.sections ?? [];
   const outdoorScores = preview?.outdoorScores ?? [];
+  const reportSummary = preview?.reportSummary ?? null;
   if (!preview) return null;
-  return <div className="mt-4 rounded-2xl border bg-white p-4 text-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="font-semibold">Evaluation preview</div><div className="mt-1 text-slate-600">{preview.candidate?.name ?? preview.candidateId} / {preview.candidate?.id ?? preview.candidateId} / {preview.candidate?.level ?? "-"}</div></div><StatusPill tone="good">JSON read model</StatusPill></div><div className="mt-4 grid gap-2 md:grid-cols-4"><div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">Sections</div><div className="font-semibold">{summary.sectionsClosed ?? 0} / {summary.sectionsTotal ?? 0} closed</div></div><div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">Test responses</div><div className="font-semibold">{summary.testResponsesTotal ?? 0}</div></div><div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">Outdoor scores</div><div className="font-semibold">{summary.outdoorScoresTotal ?? 0}</div></div><div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">Outdoor total / avg</div><div className="font-semibold">{summary.outdoorScoreSum ?? 0} / {summary.outdoorScoreAverage ?? "-"}</div></div></div><div className="mt-3 flex flex-wrap gap-2"><StatusPill tone={summary.hasPrimaryExaminerScores ? "good" : "default"}>Primary scores: {summary.hasPrimaryExaminerScores ? "yes" : "no"}</StatusPill><StatusPill tone={summary.hasSecondaryExaminerScores ? "good" : "default"}>Secondary scores: {summary.hasSecondaryExaminerScores ? "yes" : "no"}</StatusPill></div>{sections.length > 0 && <div className="mt-4"><div className="mb-2 font-medium">Sections</div><div className="space-y-2">{sections.slice(0, 6).map((section) => <div key={section.id ?? `${section.candidate_id}:${section.section_key}`} className="flex justify-between gap-3 rounded-xl bg-slate-100 p-2"><span>{section.section_key}</span><StatusPill tone={section.status === "closed" ? "good" : "warn"}>{section.status}</StatusPill></div>)}</div></div>}{outdoorScores.length > 0 && <div className="mt-4"><div className="mb-2 font-medium">Outdoor scores</div><div className="space-y-2">{outdoorScores.slice(0, 8).map((score) => <div key={score.id ?? `${score.candidate_id}:${score.examiner_id}:${score.item_id}`} className="grid gap-2 rounded-xl bg-slate-100 p-2 md:grid-cols-4"><span>{score.item_id}</span><span>{score.examiner_id}</span><span>{score.payload?.mode ?? "-"}</span><strong>{score.score ?? "-"}</strong></div>)}</div></div>}</div>;
+
+  return (
+    <div className="mt-4 rounded-2xl border bg-white p-4 text-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="font-semibold">Evaluation preview</div>
+          <div className="mt-1 text-slate-600">
+            {preview.candidate?.name ?? preview.candidateId} / {preview.candidate?.id ?? preview.candidateId} / {preview.candidate?.level ?? "-"}
+          </div>
+        </div>
+        <StatusPill tone="good">JSON read model</StatusPill>
+      </div>
+
+      <div className="mt-4 grid gap-2 md:grid-cols-4">
+        <div className="rounded-xl bg-slate-100 p-3">
+          <div className="text-xs text-slate-500">Sections</div>
+          <div className="font-semibold">{summary.sectionsClosed ?? 0} / {summary.sectionsTotal ?? 0} closed</div>
+        </div>
+        <div className="rounded-xl bg-slate-100 p-3">
+          <div className="text-xs text-slate-500">Test responses</div>
+          <div className="font-semibold">{summary.testResponsesTotal ?? 0}</div>
+        </div>
+        <div className="rounded-xl bg-slate-100 p-3">
+          <div className="text-xs text-slate-500">Outdoor scores</div>
+          <div className="font-semibold">{summary.outdoorScoresTotal ?? 0}</div>
+        </div>
+        <div className="rounded-xl bg-slate-100 p-3">
+          <div className="text-xs text-slate-500">Outdoor total / avg</div>
+          <div className="font-semibold">{summary.outdoorScoreSum ?? 0} / {summary.outdoorScoreAverage ?? "-"}</div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <StatusPill tone={summary.hasPrimaryExaminerScores ? "good" : "default"}>Primary scores: {summary.hasPrimaryExaminerScores ? "yes" : "no"}</StatusPill>
+        <StatusPill tone={summary.hasSecondaryExaminerScores ? "good" : "default"}>Secondary scores: {summary.hasSecondaryExaminerScores ? "yes" : "no"}</StatusPill>
+      </div>
+
+      {reportSummary && (
+        <div className="mt-4">
+          <div className="mb-2 font-medium">Report draft summary</div>
+          <div className="grid gap-2 md:grid-cols-3">
+            <div className="rounded-xl bg-slate-100 p-3">
+              <div className="text-xs text-slate-500">Report draft</div>
+              <div className="font-semibold">{reportSummary.hasReportDraft ? "yes" : "no"}</div>
+            </div>
+            <div className="rounded-xl bg-slate-100 p-3">
+              <div className="text-xs text-slate-500">Trees with content</div>
+              <div className="font-semibold">{reportSummary.treesWithContent ?? 0} / {reportSummary.treesTotal ?? 0}</div>
+            </div>
+            <div className="rounded-xl bg-slate-100 p-3">
+              <div className="text-xs text-slate-500">Field notes filled</div>
+              <div className="font-semibold">{reportSummary.fieldNotesFilled ?? 0}</div>
+            </div>
+            <div className="rounded-xl bg-slate-100 p-3">
+              <div className="text-xs text-slate-500">Final sections filled</div>
+              <div className="font-semibold">{reportSummary.finalSectionsFilled ?? 0}</div>
+            </div>
+            <div className="rounded-xl bg-slate-100 p-3">
+              <div className="text-xs text-slate-500">Photo placeholders</div>
+              <div className="font-semibold">{reportSummary.photoPlaceholdersTotal ?? 0}</div>
+            </div>
+            <div className="rounded-xl bg-slate-100 p-3">
+              <div className="text-xs text-slate-500">Submitted</div>
+              <div className="font-semibold">{reportSummary.isSubmitted ? "yes" : "no"}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sections.length > 0 && (
+        <div className="mt-4">
+          <div className="mb-2 font-medium">Sections</div>
+          <div className="space-y-2">
+            {sections.slice(0, 6).map((section) => (
+              <div key={section.id ?? `${section.candidate_id}:${section.section_key}`} className="flex justify-between gap-3 rounded-xl bg-slate-100 p-2">
+                <span>{section.section_key}</span>
+                <StatusPill tone={section.status === "closed" ? "good" : "warn"}>{section.status}</StatusPill>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {outdoorScores.length > 0 && (
+        <div className="mt-4">
+          <div className="mb-2 font-medium">Outdoor scores</div>
+          <div className="space-y-2">
+            {outdoorScores.slice(0, 8).map((score) => (
+              <div key={score.id ?? `${score.candidate_id}:${score.examiner_id}:${score.item_id}`} className="grid gap-2 rounded-xl bg-slate-100 p-2 md:grid-cols-4">
+                <span>{score.item_id}</span>
+                <span>{score.examiner_id}</span>
+                <span>{score.payload?.mode ?? "-"}</span>
+                <strong>{score.score ?? "-"}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 function ScoringCard({ selectedCandidate, scoring, updateScore, generateEvaluation, lastEvaluation, loadEvaluationPreview, evaluationPreview, evaluationLoading, evaluationError, downloadDraftExport, exportLoading, exportError }) { return <Card className="rounded-2xl shadow-sm lg:col-span-3"><CardContent className="p-5"><SectionTitle icon={BadgeCheck} title="Examiner / Candidate scoring and evaluation" subtitle="Scoring engine uses the candidate level." /><div className="grid gap-4 lg:grid-cols-3"><div className="rounded-2xl border bg-white p-4"><div className="font-semibold">{selectedCandidate.name}</div><div className="mt-4 text-sm text-slate-600">Status: <StatusPill>{selectedCandidate.status}</StatusPill></div></div><div className="rounded-2xl border bg-white p-4 lg:col-span-2"><div className="grid gap-3 md:grid-cols-3"><label className="text-sm font-medium">Written / {scoring.writtenMax}<input type="number" value={selectedCandidate.written ?? ""} onChange={(e) => updateScore("written", e.target.value)} className="mt-1 w-full rounded-xl border bg-white p-2" /></label><label className="text-sm font-medium">Outdoor / {scoring.outdoorMax}<input type="number" value={selectedCandidate.outdoor ?? ""} onChange={(e) => updateScore("outdoor", e.target.value)} className="mt-1 w-full rounded-xl border bg-white p-2" /></label>{selectedCandidate.level === "Consulting" && <label className="text-sm font-medium">Report / {scoring.reportMax}<input type="number" value={selectedCandidate.report ?? ""} onChange={(e) => updateScore("report", e.target.value)} className="mt-1 w-full rounded-xl border bg-white p-2" /></label>}</div><div className="mt-4 grid gap-3 md:grid-cols-5"><div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">Total</div><div className="text-xl font-bold">{scoring.total} / {scoring.max}</div></div><div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">Percentage</div><div className="text-xl font-bold">{scoring.percentage}%</div></div><div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">Result</div><div className="text-xl font-bold">{scoring.pass ? "PASS" : "NOT PASSED"}</div></div><Button onClick={generateEvaluation} className="h-full rounded-2xl"><FileSpreadsheet className="mr-2 h-4 w-4" /> Generate Evaluation</Button><Button onClick={() => loadEvaluationPreview(selectedCandidate.id)} disabled={evaluationLoading} variant="outline" className="h-full rounded-2xl">{evaluationLoading ? "Loading..." : "Load Evaluation Preview"}</Button><Button onClick={() => downloadDraftExport(selectedCandidate.id)} disabled={exportLoading} variant="outline" className="h-full rounded-2xl"><FileSpreadsheet className="mr-2 h-4 w-4" /> {exportLoading ? "Exporting..." : "Download Draft Export (.xls)"}</Button></div><p className="mt-3 text-xs text-slate-500">Draft export only — not the official VETcert evaluation template.</p>{evaluationError && <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">{evaluationError}</div>}{exportError && <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">{exportError}</div>}{lastEvaluation && <div className="mt-4 rounded-2xl border bg-white p-4 text-sm"><div className="font-semibold">Last generated evaluation</div><div className="mt-1 text-slate-600">{lastEvaluation.candidate} / {lastEvaluation.level}: {lastEvaluation.total}/{lastEvaluation.max} ({lastEvaluation.percentage}%) - {lastEvaluation.result}</div></div>}<EvaluationPreviewCard preview={evaluationPreview} /></div></div></CardContent></Card>; }
 function AuditSyncView({ sync, setSync, audit }) { return <Card className="rounded-2xl shadow-sm lg:col-span-3"><CardContent className="p-5"><SectionTitle icon={CloudOff} title="Audit trail and offline sync" subtitle="Every important action is queued for sync and written to the audit log." /><div className="grid gap-4 lg:grid-cols-2"><div className="rounded-2xl border bg-white p-4"><div className="mb-3 flex items-center justify-between"><h3 className="font-semibold">Sync queue</h3><Button onClick={() => setSync((prev) => prev.map((x) => ({ ...x, status: "Synced" })))} variant="outline" className="rounded-2xl">Mark all synced</Button></div><div className="space-y-2 text-sm">{sync.slice(0, 6).map((item) => <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-100 p-3"><div><div className="font-medium">{item.type}</div><div className="text-xs text-slate-500">{item.detail ?? item.id}</div></div><StatusPill tone={item.status === "Synced" ? "good" : "warn"}>{item.status}</StatusPill></div>)}</div></div><div className="rounded-2xl border bg-white p-4"><h3 className="mb-3 font-semibold">Audit log</h3><div className="max-h-72 space-y-2 overflow-auto text-sm">{audit.slice(0, 8).map((entry) => <div key={entry.id} className="rounded-xl border p-3"><div className="flex justify-between gap-3"><div className="font-medium">{entry.action}</div><div className="text-xs text-slate-500">{entry.time}</div></div><div className="text-slate-600">{entry.target}</div><div className="text-xs text-slate-500">{entry.detail}</div></div>)}</div></div></div></CardContent></Card>; }
