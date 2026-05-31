@@ -474,11 +474,12 @@ export default function VetBaraPrototype() {
       })));
     }
     if (Array.isArray(result.examiners)) {
-      setExaminers(result.examiners.map((examiner) => ({
+          setExaminers(result.examiners.map((examiner) => ({
         id: examiner.id,
         name: examiner.name || examiner.payload?.name || examiner.id,
-        birthDate: examiner.payload?.birthDate || "",
+        birthDate: examiner.birthDate || examiner.birth_date || examiner.payload?.birthDate || examiner.payload?.birth_date || "",
         registrationId: examiner.registrationId || examiner.registration_id || examiner.payload?.registrationId || examiner.payload?.registration_id || examiner.id,
+        email: examiner.email || examiner.payload?.email || "",
       })));
     }
     if (Array.isArray(result.assignments)) {
