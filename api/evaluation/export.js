@@ -95,6 +95,102 @@ async function readRows(table, candidateId, orderBy = "updated_at.desc") {
   return supabase(`${table}?candidate_id=eq.${encodeURIComponent(candidateId)}&select=*${order}`);
 }
 
+async function readReportEvents(candidateId) {
+  if (!envReady()) return [];
+  const types = encodeURIComponent("report_draft.saved,report_photo.added");
+  return supabase(`sync_events?candidate_id=eq.${encodeURIComponent(candidateId)}&event_type=in.(${types})&select=*&order=created_at.asc`);
+}
+
+function createReportDraft() {
+  return {
+    "Tree A": { fieldNotes: "", photos: [], finalSections: {} },
+    "Tree B": { fieldNotes: "", photos: [], finalSections: {} },
+  };
+}
+
+function buildReportDraft(events) {
+  return events.reduce((draft, event) => {
+    const payload = event.payload ?? {};
+    const treeId = payload.treeId || payload.tree || "Tree A";
+
+    if (!draft[treeId]) {
+      draft[treeId] = { fieldNotes: "", photos: [], finalSections: {} };
+    }
+
+    if (event.event_type === "report_draft.saved") {
+      const fieldKey = payload.fieldKey || payload.key;
+      const fieldType = payload.fieldType || "finalSection";
+      if (!fieldKey) return draft;
+
+      if (fieldType === "fieldNotes" || fieldKey === "fieldNotes") {
+        draft[treeId] = { ...draft[treeId], fieldNotes: payload.value ?? "" };
+      } else {
+        draft[treeId] = {
+          ...draft[treeId],
+          finalSections: {
+            ...(draft[treeId].finalSections ?? {}),
+            [fieldKey]: payload.value ?? "",
+          },
+        };
+      }
+    }
+
+    if (event.event_type === "report_photo.added") {
+      const photoId = payload.photoId || payload.id;
+      if (!photoId) return draft;
+      const existing = draft[treeId].photos ?? [];
+      if (existing.some((photo) => photo.id === photoId)) return draft;
+      draft[treeId] = {
+        ...draft[treeId],
+        photos: [
+          ...existing,
+          {
+            id: photoId,
+            caption: payload.caption || `${treeId} candidate photo ${existing.length + 1}`,
+            capturedAt: payload.capturedAt || event.created_at || null,
+          },
+        ],
+      };
+    }
+
+    return draft;
+  }, createReportDraft());
+}
+
+function hasText(value) {
+  return String(value ?? "").trim().length > 0;
+}
+
+function treeHasReportContent(tree) {
+  const finalSections = tree?.finalSections && typeof tree.finalSections === "object" ? tree.finalSections : {};
+  const photos = Array.isArray(tree?.photos) ? tree.photos : [];
+  return hasText(tree?.fieldNotes) || Object.values(finalSections).some(hasText) || photos.length > 0;
+}
+
+function buildReportSummary(reportDraft, reportEvents, sections) {
+  const trees = Object.values(reportDraft ?? {});
+  const fieldNotesFilled = trees.filter((tree) => hasText(tree?.fieldNotes)).length;
+  const finalSectionsFilled = trees.reduce((total, tree) => {
+    const finalSections = tree?.finalSections && typeof tree.finalSections === "object" ? tree.finalSections : {};
+    return total + Object.values(finalSections).filter(hasText).length;
+  }, 0);
+  const photoPlaceholdersTotal = trees.reduce((total, tree) => total + (Array.isArray(tree?.photos) ? tree.photos.length : 0), 0);
+  const isSubmitted = sections.some((section) => {
+    const sectionKey = section.section_key ?? section.sectionKey;
+    return sectionKey === "report" && ["closed", "submitted"].includes(section.status);
+  });
+
+  return {
+    hasReportDraft: Boolean((reportEvents ?? []).length || fieldNotesFilled || finalSectionsFilled || photoPlaceholdersTotal),
+    treesTotal: trees.length,
+    treesWithContent: trees.filter(treeHasReportContent).length,
+    fieldNotesFilled,
+    finalSectionsFilled,
+    photoPlaceholdersTotal,
+    isSubmitted,
+  };
+}
+
 function scoreMode(score) {
   if (score.payload?.mode) return score.payload.mode;
   const assignment = ASSIGNMENTS[score.candidate_id];
@@ -102,6 +198,20 @@ function scoreMode(score) {
   if (assignment.primary === score.examiner_id) return "primary";
   if (assignment.secondary === score.examiner_id) return "secondary";
   return null;
+}
+
+function selectedAnswer(response) {
+  const answer = response.answer && typeof response.answer === "object" ? response.answer : {};
+  return answer.selectedAnswer ?? answer.answer ?? response.selected_answer ?? "";
+}
+
+function responseVariant(response) {
+  const answer = response.answer && typeof response.answer === "object" ? response.answer : {};
+  return answer.variantCode ?? response.variant_code ?? "";
+}
+
+function outdoorNote(score) {
+  return score.note ?? score.comment ?? score.payload?.note ?? score.payload?.comment ?? "";
 }
 
 function numericOutdoorScores(outdoorScores) {
@@ -213,7 +323,7 @@ function listTable(title, items) {
   return dataTable(title, [{ label: "Item", value: (row) => row.value }], items.map((value) => ({ value })));
 }
 
-function buildHtmlExport(candidate, calculation, sections, testResponses, outdoorAssessments, outdoorScores, generatedAt) {
+function buildHtmlExport(candidate, calculation, sections, testResponses, outdoorAssessments, outdoorScores, reportSummary, generatedAt) {
   const candidateRows = [
     ["Candidate ID", candidate.id],
     ["Name", candidate.name],
@@ -241,6 +351,32 @@ function buildHtmlExport(candidate, calculation, sections, testResponses, outdoo
     ["Can Generate Evaluation File", calculation.readiness.canGenerateEvaluationFile],
   ];
 
+  const sectionSummaryRows = [
+    ["Sections Total", sections.length],
+    ["Sections Closed", sections.filter((section) => section.status === "closed").length],
+    ["Open / In Progress", sections.filter((section) => section.status && section.status !== "closed").length],
+  ];
+
+  const testSummaryRows = [
+    ["Response Count", testResponses.length],
+    ["Question IDs", testResponses.map((response) => response.question_id).filter(Boolean).join(", ")],
+  ];
+
+  const outdoorSummaryRows = [
+    ["Score Rows", outdoorScores.length],
+    ["Rows With Notes", outdoorScores.filter((score) => hasText(outdoorNote(score))).length],
+    ["Assessment Rows", outdoorAssessments.length],
+  ];
+
+  const reportSummaryRows = [
+    ["Report Draft", reportSummary.hasReportDraft ? "yes" : "no"],
+    ["Trees With Content", `${reportSummary.treesWithContent} / ${reportSummary.treesTotal}`],
+    ["Field Notes Filled", reportSummary.fieldNotesFilled],
+    ["Final Sections Filled", reportSummary.finalSectionsFilled],
+    ["Photo Placeholders", reportSummary.photoPlaceholdersTotal],
+    ["Submitted", reportSummary.isSubmitted ? "yes" : "no"],
+  ];
+
   return `<!doctype html>
 <html>
 <head>
@@ -262,6 +398,10 @@ function buildHtmlExport(candidate, calculation, sections, testResponses, outdoo
   <p class="draft-note">${escapeHtml(DRAFT_NOTE)}</p>
   ${keyValueTable("Candidate", candidateRows)}
   ${keyValueTable("Calculation Summary", calculationRows)}
+  ${keyValueTable("Section Status Summary", sectionSummaryRows)}
+  ${keyValueTable("Test Response Summary", testSummaryRows)}
+  ${keyValueTable("Outdoor Score Summary", outdoorSummaryRows)}
+  ${keyValueTable("Report Draft Summary", reportSummaryRows)}
   ${listTable("Blocking Issues", calculation.readiness.blockingIssues)}
   ${listTable("Warnings", calculation.readiness.warnings)}
   ${dataTable("Candidate Sections", [
@@ -275,18 +415,19 @@ function buildHtmlExport(candidate, calculation, sections, testResponses, outdoo
   ${dataTable("Outdoor Scores", [
     { label: "Item", value: (row) => row.item_id },
     { label: "Examiner", value: (row) => row.examiner_id },
-    { label: "Mode", value: (row) => scoreMode(row) },
+    { label: "Role / Mode", value: (row) => scoreMode(row) },
     { label: "Score", value: (row) => row.score },
-    { label: "Note", value: (row) => row.note },
+    { label: "Note / Comment", value: (row) => outdoorNote(row) },
     { label: "Updated At", value: (row) => row.updated_at },
     { label: "Payload", value: (row) => row.payload },
   ], outdoorScores)}
   ${dataTable("Test Responses", [
     { label: "Question", value: (row) => row.question_id },
-    { label: "Answer", value: (row) => row.answer },
+    { label: "Variant", value: (row) => responseVariant(row) },
+    { label: "Selected Answer", value: (row) => selectedAnswer(row) },
     { label: "Submitted At", value: (row) => row.submitted_at },
     { label: "Updated At", value: (row) => row.updated_at },
-    { label: "Payload", value: (row) => row.payload },
+    { label: "Answer Payload", value: (row) => row.answer },
   ], testResponses)}
   ${dataTable("Outdoor Assessments", [
     { label: "Examiner", value: (row) => row.examiner_id },
@@ -313,17 +454,20 @@ export default async function handler(request, response) {
     if (!session) return sendJson(response, 401, { error: "Invalid or expired session" });
     if (!canExportCandidate(session, candidateId)) return sendJson(response, 403, { error: "Candidate is outside this session scope" });
 
-    const [sections, testResponses, outdoorAssessments, outdoorScores] = await Promise.all([
+    const [sections, testResponses, outdoorAssessments, outdoorScores, reportEvents] = await Promise.all([
       readRows("candidate_sections", candidateId),
       readRows("test_responses", candidateId),
       readRows("outdoor_assessments", candidateId),
       readRows("outdoor_scores", candidateId),
+      readReportEvents(candidateId),
     ]);
 
     const candidate = candidateFor(candidateId);
     const generatedAt = new Date().toISOString();
     const calculation = buildDraftCalculation(candidate, sections, testResponses, outdoorAssessments, outdoorScores);
-    const html = buildHtmlExport(candidate, calculation, sections, testResponses, outdoorAssessments, outdoorScores, generatedAt);
+    const reportDraft = buildReportDraft(reportEvents);
+    const reportSummary = buildReportSummary(reportDraft, reportEvents, sections);
+    const html = buildHtmlExport(candidate, calculation, sections, testResponses, outdoorAssessments, outdoorScores, reportSummary, generatedAt);
 
     return sendJson(response, 200, {
       ok: true,
