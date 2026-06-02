@@ -197,6 +197,44 @@ export const translations = {
   },
 };
 
+
+Object.assign(translations.en, {
+  "common.scanQr": "Scan QR",
+  "common.loggedIn": "Logged in",
+  "common.logout": "Logout",
+
+  "candidate.view.title": "Candidate / Tablet login and workspace",
+  "candidate.view.subtitle": "Candidate opens only their own QR workspace, confirms identity, then completes each exam section.",
+  "candidate.qrAccess.title": "Candidate QR access",
+  "candidate.qrAccess.helper": "Scan the personal QR issued by the Centre. This portal only shows the current Candidate workspace.",
+  "candidate.empty": "No Candidate is logged in. Scan the personal Candidate QR issued by the Centre.",
+
+  "examiner.view.title": "Examiner / Landing page and Outdoor exercises",
+  "examiner.view.subtitle": "Examiner logs in, confirms identity, sees assigned candidates and opens outdoor forms.",
+  "examiner.qrAccess.title": "Examiner QR access",
+  "examiner.qrAccess.helper": "Scan the personal Examiner QR issued by the Centre. This portal only shows assigned Candidate work.",
+  "examiner.empty": "No Examiner is logged in. Scan the personal Examiner QR issued by the Centre."
+});
+
+Object.assign(translations.cs, {
+  "common.scanQr": "Skenovat QR",
+  "common.loggedIn": "Přihlášeno",
+  "common.logout": "Odhlásit",
+
+  "candidate.view.title": "Kandidát / Přihlášení na tabletu a pracovní prostor",
+  "candidate.view.subtitle": "Kandidát otevře pouze svůj vlastní QR pracovní prostor, potvrdí identitu a poté dokončí jednotlivé části zkoušky.",
+  "candidate.qrAccess.title": "Přístup přes Candidate QR",
+  "candidate.qrAccess.helper": "Naskenujte osobní QR vydaný Centrem. Tento portál zobrazuje pouze aktuální pracovní prostor kandidáta.",
+  "candidate.empty": "Není přihlášen žádný kandidát. Naskenujte osobní Candidate QR vydaný Centrem.",
+
+  "examiner.view.title": "Zkoušející / Úvodní stránka a outdoor cvičení",
+  "examiner.view.subtitle": "Zkoušející se přihlásí, potvrdí identitu, vidí přiřazené kandidáty a otevírá outdoor formuláře.",
+  "examiner.qrAccess.title": "Přístup přes Examiner QR",
+  "examiner.qrAccess.helper": "Naskenujte osobní Examiner QR vydaný Centrem. Tento portál zobrazuje pouze přiřazenou práci kandidátů.",
+  "examiner.empty": "Není přihlášen žádný zkoušející. Naskenujte osobní Examiner QR vydaný Centrem."
+});
+
+
 export function makeTranslator(language) {
   return function t(key) {
     return translations[language]?.[key] ?? translations.en[key] ?? key;
