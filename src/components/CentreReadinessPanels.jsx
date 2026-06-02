@@ -1,51 +1,128 @@
-import React from "react";
+function tr(t, key, fallback) {
+  return typeof t === "function" ? t(key) : fallback;
+}
 
-export function CentreValidationSummary({ issues, StatusPill }) {
+export function CentreValidationSummary({ issues, StatusPill, t }) {
   const errorCount = issues.filter((issue) => issue.severity === "error").length;
-  const warningCount = issues.filter((issue) => issue.severity === "warning").length;
+  const warningCount = issues.length - errorCount;
   const sortedIssues = [...issues].sort((a, b) => (a.severity === "error" ? 0 : 1) - (b.severity === "error" ? 0 : 1));
-  const ready = errorCount === 0;
 
-  return <div className="mt-3 rounded-xl border bg-slate-50 p-3 text-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="font-semibold">Centre Setup checks</div><div className="mt-1 text-slate-600">{ready ? "Ready for pilot smoke test" : "Action required before pilot smoke test"}</div></div><div className="flex flex-wrap gap-2"><StatusPill tone={issues.length ? "warn" : "good"}>{issues.length} validation issue(s)</StatusPill><StatusPill tone={errorCount ? "bad" : "good"}>{errorCount} error(s)</StatusPill><StatusPill tone={warningCount ? "warn" : "good"}>{warningCount} warning(s)</StatusPill></div></div><p className="mt-2 text-xs text-slate-500">Errors should be fixed before distributing QR links. Warnings can be reviewed during pilot preparation.</p>{issues.length === 0 ? <div className="mt-3 text-slate-600">No validation issues. Setup is ready for pilot smoke test.</div> : <div className="mt-3 space-y-2">{sortedIssues.map((issue, index) => <div key={`${issue.severity}-${index}`} className={`rounded-lg border p-2 ${issue.severity === "error" ? "border-rose-200 bg-rose-50 text-rose-900" : "border-amber-200 bg-amber-50 text-amber-950"}`}><span className="font-medium">{issue.severity === "error" ? "Error" : "Warning"}:</span> {issue.message}</div>)}</div>}</div>;
+  return (
+    <div className="mt-3 rounded-2xl border bg-white p-4 text-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">{tr(t, "centre.validation.title", "Centre Setup checks")}</h3>
+          <p className="mt-1 text-slate-600">{tr(t, "centre.validation.helper", "Errors should be fixed before distributing QR links. Warnings can be reviewed during pilot preparation.")}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <StatusPill tone={errorCount ? "bad" : "good"}>{errorCount ? tr(t, "centre.validation.action", "Action required before pilot smoke test") : tr(t, "centre.validation.ready", "Ready for pilot smoke test")}</StatusPill>
+          <StatusPill>{issues.length} validation issue(s)</StatusPill>
+          <StatusPill tone={errorCount ? "bad" : "default"}>{errorCount} error(s)</StatusPill>
+          <StatusPill tone={warningCount ? "warn" : "default"}>{warningCount} warning(s)</StatusPill>
+        </div>
+      </div>
+      {sortedIssues.length === 0 ? (
+        <div className="mt-3 rounded-xl bg-emerald-50 p-3 text-emerald-900">{tr(t, "centre.validation.empty", "No validation issues. Setup is ready for pilot smoke test.")}</div>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {sortedIssues.map((issue, index) => (
+            <div key={`${issue.message}-${index}`} className={`rounded-xl p-3 ${issue.severity === "error" ? "bg-rose-50 text-rose-950" : "bg-amber-50 text-amber-950"}`}>
+              <span className="font-semibold">{issue.severity === "error" ? "Error" : "Warning"}:</span> {issue.message}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
-export function PilotReadinessGuardrails({ centreValidationIssues, centreSetupDirty, testImportSummary, dataMode, StatusPill }) {
+export function PilotReadinessGuardrails({ centreValidationIssues, centreSetupDirty, testImportSummary, dataMode, StatusPill, t }) {
   const warnings = [
-    ...(centreValidationIssues.some((issue) => issue.severity === "error") ? ["Fix validation errors before distributing QR links."] : []),
-    ...(centreSetupDirty ? ["Save Centre Setup before distributing QR links."] : []),
-    ...(!testImportSummary ? ["Import/select a test package before written test pilot runs."] : []),
-    ...(dataMode === "demo" ? ["Load backend Centre Setup before pilot testing with real users."] : []),
+    ...(centreValidationIssues.some((issue) => issue.severity === "error") ? [tr(t, "centre.guardrails.validation", "Fix validation errors before distributing QR links.")] : []),
+    ...(centreSetupDirty ? [tr(t, "centre.guardrails.unsaved", "Save Centre Setup before distributing QR links.")] : []),
+    ...(!testImportSummary ? [tr(t, "centre.guardrails.testPackage", "Import/select a test package before written test pilot runs.")] : []),
+    ...(dataMode === "demo" ? [tr(t, "centre.guardrails.backend", "Load backend Centre Setup before pilot testing with real users.")] : []),
   ];
 
-  return <div className="mt-4 rounded-2xl border bg-white p-4 text-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">Pilot readiness guardrails</h3><p className="mt-1 text-slate-600">These guardrails do not block demo testing, but they should be resolved before a real pilot run.</p></div><StatusPill tone={warnings.length ? "warn" : "good"}>{warnings.length ? `${warnings.length} warning(s)` : "ready"}</StatusPill></div>{warnings.length === 0 ? <div className="mt-3 rounded-xl bg-emerald-50 p-3 text-emerald-900">Pilot readiness looks good.</div> : <div className="mt-3 space-y-2">{warnings.map((warning) => <div key={warning} className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950">{warning}</div>)}</div>}</div>;
+  return (
+    <div className="mt-4 rounded-2xl border bg-white p-4 text-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">{tr(t, "centre.guardrails.title", "Pilot readiness guardrails")}</h3>
+          <p className="mt-1 text-slate-600">{tr(t, "centre.guardrails.helper", "These guardrails do not block demo testing, but they should be resolved before a real pilot run.")}</p>
+        </div>
+        <StatusPill tone={warnings.length ? "warn" : "good"}>{warnings.length ? `${warnings.length} warning(s)` : "ready"}</StatusPill>
+      </div>
+      {warnings.length === 0 ? (
+        <div className="mt-3 rounded-xl bg-emerald-50 p-3 text-emerald-900">{tr(t, "centre.guardrails.ready", "Pilot readiness looks good.")}</div>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {warnings.map((warning) => <div key={warning} className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950">{warning}</div>)}
+        </div>
+      )}
+    </div>
+  );
 }
 
-export function PilotRunSummary({ centreValidationIssues, centreSetupDirty, testImportSummary, dataMode, StatusPill }) {
+export function PilotRunSummary({ centreValidationIssues, centreSetupDirty, testImportSummary, dataMode, StatusPill, t }) {
   const hasValidationErrors = centreValidationIssues.some((issue) => issue.severity === "error");
-  const qrDistributionReady = dataMode === "backend" && !centreSetupDirty;
+  const qrDistributionReady = dataMode === "backend" && !centreSetupDirty && !hasValidationErrors && Boolean(testImportSummary);
   const rows = [
-    ["Data mode", dataMode === "backend" ? "backend-loaded pilot data" : "demo fallback data", dataMode === "backend" ? "good" : "warn"],
-    ["Centre Setup", centreSetupDirty ? "Unsaved local changes" : "Saved / no local changes", centreSetupDirty ? "warn" : "good"],
-    ["Validation", hasValidationErrors ? "Action required" : "Ready for pilot smoke test", hasValidationErrors ? "bad" : "good"],
-    ["Test package", testImportSummary ? "Imported" : "Missing", testImportSummary ? "good" : "warn"],
-    ["QR distribution", qrDistributionReady ? "Ready after setup is saved and backend-loaded" : "Review guardrails", qrDistributionReady ? "good" : "warn"],
+    [tr(t, "centre.run.dataMode", "Data mode"), dataMode === "backend" ? tr(t, "centre.run.backend", "backend-loaded pilot data") : tr(t, "centre.run.demo", "demo fallback data"), dataMode === "backend" ? "good" : "warn"],
+    [tr(t, "centre.run.setup", "Centre Setup"), centreSetupDirty ? tr(t, "centre.run.unsaved", "Unsaved local changes") : tr(t, "centre.run.saved", "Saved / no local changes"), centreSetupDirty ? "warn" : "good"],
+    [tr(t, "centre.run.validation", "Validation"), hasValidationErrors ? tr(t, "centre.validation.action", "Action required before pilot smoke test") : tr(t, "centre.validation.ready", "Ready for pilot smoke test"), hasValidationErrors ? "bad" : "good"],
+    [tr(t, "centre.run.testPackage", "Test package"), testImportSummary ? tr(t, "centre.run.imported", "Imported") : tr(t, "centre.run.missing", "Missing"), testImportSummary ? "good" : "warn"],
+    [tr(t, "centre.run.qrDistribution", "QR distribution"), qrDistributionReady ? tr(t, "centre.run.qrReady", "Ready after setup is saved and backend-loaded") : tr(t, "centre.run.review", "Review guardrails"), qrDistributionReady ? "good" : "warn"],
   ];
 
-  return <div className="mt-4 rounded-2xl border bg-white p-4 text-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">Pilot run summary</h3><p className="mt-1 text-slate-600">Use this summary before sharing Candidate or Examiner QR links.</p></div><StatusPill tone={qrDistributionReady && !hasValidationErrors && testImportSummary ? "good" : "warn"}>{qrDistributionReady && !hasValidationErrors && testImportSummary ? "ready" : "review"}</StatusPill></div><div className="mt-3 grid gap-2 md:grid-cols-2 lg:grid-cols-5">{rows.map(([label, value, tone]) => <div key={label} className="rounded-xl bg-slate-100 p-3"><div className="mb-2 text-xs font-medium text-slate-500">{label}</div><StatusPill tone={tone}>{value}</StatusPill></div>)}</div></div>;
+  return (
+    <div className="mt-4 rounded-2xl border bg-white p-4 text-sm">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">{tr(t, "centre.run.title", "Pilot run summary")}</h3>
+          <p className="mt-1 text-slate-600">{tr(t, "centre.run.helper", "Use this summary before sharing Candidate or Examiner QR links.")}</p>
+        </div>
+        <StatusPill tone={qrDistributionReady ? "good" : "warn"}>{qrDistributionReady ? "ready" : "review"}</StatusPill>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-5">
+        {rows.map(([label, value, tone]) => (
+          <div key={label} className="rounded-xl bg-slate-100 p-3">
+            <div className="text-xs text-slate-500">{label}</div>
+            <div className="mt-1"><StatusPill tone={tone}>{value}</StatusPill></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-export function CentreNetworkReadinessChecklist({ StatusPill }) {
+export function CentreNetworkReadinessChecklist({ StatusPill, t }) {
   const items = [
-    "Stable Wi-Fi/router is running",
-    "Internet access works on tablets",
-    "Deployed VetBara URL opens on tablets",
-    "Centre QR/session opens",
-    "Candidate QR opens on a tablet",
-    "Examiner QR opens on a tablet",
-    "Save/Load Centre Setup tested",
-    "Sync/Audit panel checked",
-    "Export download tested",
+    ["centre.network.wifi", "Stable Wi-Fi/router is running"],
+    ["centre.network.internet", "Internet access works on tablets"],
+    ["centre.network.url", "Deployed VetBara URL opens on tablets"],
+    ["centre.network.centreQr", "Centre QR/session opens"],
+    ["centre.network.candidateQr", "Candidate QR opens on a tablet"],
+    ["centre.network.examinerQr", "Examiner QR opens on a tablet"],
+    ["centre.network.setup", "Save/Load Centre Setup tested"],
+    ["centre.network.sync", "Sync/Audit panel checked"],
+    ["centre.network.export", "Export download tested"],
   ];
 
-  return <div className="mt-4 rounded-2xl border bg-white p-4 text-sm"><div className="mb-3 flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">Network readiness checklist</h3><p className="mt-1 text-slate-600">Use this before distributing Candidate QR and Examiner QR links during a pilot session.</p></div><StatusPill>Guidance only</StatusPill></div><div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">{items.map((item) => <div key={item} className="rounded-xl bg-slate-100 p-3 text-slate-700">{item}</div>)}</div></div>;
+  return (
+    <div className="mt-4 rounded-2xl border bg-white p-4">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">{tr(t, "centre.network.title", "Network readiness checklist")}</h3>
+          <p className="mt-1 text-sm text-slate-600">{tr(t, "centre.network.helper", "Use this before distributing Candidate QR and Examiner QR links during a pilot session.")}</p>
+        </div>
+        <StatusPill>LAN pilot</StatusPill>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+        {items.map(([key, fallback]) => (
+          <div key={key} className="rounded-xl bg-slate-100 p-3 text-sm text-slate-700">{tr(t, key, fallback)}</div>
+        ))}
+      </div>
+    </div>
+  );
 }
