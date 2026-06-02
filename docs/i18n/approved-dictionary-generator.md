@@ -4,7 +4,7 @@
 
 `scripts/generate-approved-i18n-dictionary.mjs` reads reviewed translation pack JSON files and writes approved-only dictionary JSON files for later runtime import.
 
-The generated dictionaries are documentation/data export artifacts. They are not runtime dictionaries, and they do not enable German, Italian, Swedish, Croatian, Dutch, Norwegian, French, Spanish, or any other language in the UI.
+The generated dictionaries are documentation/data export artifacts. They are not runtime dictionaries, and they do not enable German, Italian, Swedish, Croatian, Dutch, Norwegian, French, Spanish, Romanian, or any other language in the UI.
 
 ## Command examples
 
@@ -17,7 +17,7 @@ node scripts/generate-approved-i18n-dictionary.mjs docs/i18n/de-translation-pack
 Generate all current review-pack dictionaries:
 
 ```sh
-node scripts/generate-approved-i18n-dictionary.mjs docs/i18n/de-translation-pack.json docs/i18n/it-translation-pack.json docs/i18n/sv-translation-pack.json docs/i18n/hr-translation-pack.json docs/i18n/nl-translation-pack.json docs/i18n/no-translation-pack.json docs/i18n/fr-translation-pack.json docs/i18n/es-translation-pack.json
+node scripts/generate-approved-i18n-dictionary.mjs docs/i18n/de-translation-pack.json docs/i18n/it-translation-pack.json docs/i18n/sv-translation-pack.json docs/i18n/hr-translation-pack.json docs/i18n/nl-translation-pack.json docs/i18n/no-translation-pack.json docs/i18n/fr-translation-pack.json docs/i18n/es-translation-pack.json docs/i18n/ro-translation-pack.json
 ```
 
 ## Generated files
@@ -32,6 +32,7 @@ The script infers the language code from each pack filename and writes:
 - `docs/i18n/generated/no-approved-dictionary.json`
 - `docs/i18n/generated/fr-approved-dictionary.json`
 - `docs/i18n/generated/es-approved-dictionary.json`
+- `docs/i18n/generated/ro-approved-dictionary.json`
 
 Each output is a flat dictionary:
 
@@ -113,6 +114,6 @@ Protected workflow and data values include:
 
 ## Later runtime import
 
-In a later milestone, maintainers can use these generated dictionaries as the approved input for future `translations.de`, `translations.it`, `translations.sv`, `translations.hr`, `translations.nl`, `translations.no`, `translations.fr`, and `translations.es` runtime dictionaries.
+In a later milestone, maintainers can use these generated dictionaries as the approved input for future `translations.de`, `translations.it`, `translations.sv`, `translations.hr`, `translations.nl`, `translations.no`, `translations.fr`, `translations.es`, and `translations.ro` runtime dictionaries.
 
 That later import must still preserve the full key set expected by `src/i18n.js`, run validation, and receive product approval before any language is exposed in the runtime language switcher.
