@@ -11,7 +11,7 @@
     "key": "app.subtitle",
     "en": "Pilot digital examination workspace",
     "cs": "Pilotní digitální zkušební prostředí",
-    "target": "Pilot-Arbeitsbereich fuer digitale Pruefungen",
+    "target": "Pilot-Arbeitsbereich für digitale Prüfungen",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -51,7 +51,7 @@
     "key": "scanner.open",
     "en": "Open QR scanner",
     "cs": "Otevřít QR skener",
-    "target": "oeffnen QR scanner",
+    "target": "öffnen QR scanner",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -59,7 +59,7 @@
     "key": "scanner.close",
     "en": "Close scanner",
     "cs": "Zavřít skener",
-    "target": "Scanner schliessen",
+    "target": "Scanner schließen",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -75,7 +75,7 @@
     "key": "pilot.smoke.subtitle",
     "en": "Use this after each deploy to confirm the pilot workflow still works.",
     "cs": "Použijte po každém nasazení pro ověření, že pilotní workflow stále funguje.",
-    "target": "Nach jedem Deployment verwenden, um zu bestaetigen, dass der Pilot-Workflow weiterhin funktioniert.",
+    "target": "Nach jedem Deployment verwenden, um zu bestätigen, dass der Pilot-Workflow weiterhin funktioniert.",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -91,7 +91,7 @@
     "key": "pilot.smoke.candidatesExaminers",
     "en": "Confirm candidates and examiners are visible",
     "cs": "Ověřit, že jsou vidět kandidáti a zkoušející",
-    "target": "bestaetigen Kandidaten and Pruefer are sichtbar",
+    "target": "bestätigen Kandidaten and Pruefer are sichtbar",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -107,7 +107,7 @@
     "key": "pilot.smoke.candidateQr",
     "en": "Open Candidate QR and save a written test answer",
     "cs": "Otevřít Candidate QR a uložit odpověď ve written test",
-    "target": "oeffnen Candidate QR and speichern a Schriftlicher Test Antwort",
+    "target": "öffnen Candidate QR and speichern a Schriftlicher Test Antwort",
     "notes": "Protected term(s): Candidate, Candidate QR. Do not translate unless explicitly approved during review.",
     "status": "needs_review"
   },
@@ -123,7 +123,7 @@
     "key": "pilot.smoke.examinerQr",
     "en": "Open Examiner QR and save outdoor score and note",
     "cs": "Otevřít Examiner QR a uložit outdoor skóre a poznámku",
-    "target": "oeffnen Examiner QR and speichern Outdoor score and note",
+    "target": "öffnen Examiner QR and speichern Outdoor score and note",
     "notes": "Protected term(s): Examiner, Examiner QR. Do not translate unless explicitly approved during review.",
     "status": "needs_review"
   },
@@ -203,7 +203,7 @@
     "key": "help.candidate.identity",
     "en": "Confirm your identity before opening sections.",
     "cs": "Před otevřením sekcí potvrďte svou identitu.",
-    "target": "bestaetigen your Identitaet before opening Abschnitte.",
+    "target": "bestätigen your Identitaet before opening Abschnitte.",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -251,7 +251,7 @@
     "key": "help.examiner.identity",
     "en": "Confirm your identity before opening outdoor forms.",
     "cs": "Před otevřením outdoor forms potvrďte svou identitu.",
-    "target": "bestaetigen your Identitaet before opening Outdoor forms.",
+    "target": "bestätigen your Identitaet before opening Outdoor forms.",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -331,7 +331,7 @@
     "key": "centre.guardrails.title",
     "en": "Pilot readiness guardrails",
     "cs": "Pilotní guardrails připravenosti",
-    "target": "Leitplanken fuer Pilotbereitschaft",
+    "target": "Leitplanken für Pilotbereitschaft",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -499,7 +499,7 @@
     "key": "centre.run.review",
     "en": "Review guardrails",
     "cs": "Zkontrolovat guardrails",
-    "target": "pruefen guardrails",
+    "target": "prüfen guardrails",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -771,7 +771,7 @@
     "key": "candidate.identity.title",
     "en": "Confirm identity",
     "cs": "Potvrzení identity",
-    "target": "Identitaet bestaetigen",
+    "target": "Identitaet bestätigen",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -787,7 +787,7 @@
     "key": "candidate.identity.confirm",
     "en": "Confirm identity",
     "cs": "Potvrdit identitu",
-    "target": "Identitaet bestaetigen",
+    "target": "Identitaet bestätigen",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -803,7 +803,7 @@
     "key": "candidate.sections.open",
     "en": "Open section",
     "cs": "Otevřít část",
-    "target": "Abschnitt oeffnen",
+    "target": "Abschnitt öffnen",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -811,7 +811,7 @@
     "key": "candidate.sections.reopen",
     "en": "Reopen section",
     "cs": "Znovu otevřít část",
-    "target": "Abschnitt erneut oeffnen",
+    "target": "Abschnitt erneut öffnen",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -827,7 +827,7 @@
     "key": "candidate.sections.opened",
     "en": "Open",
     "cs": "Otevřeno",
-    "target": "oeffnen",
+    "target": "öffnen",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -883,7 +883,7 @@
     "key": "test.submit",
     "en": "Submit and close written test",
     "cs": "Odeslat a uzavřít písemný test",
-    "target": "Absenden und schliessen Schriftlicher Test",
+    "target": "Absenden und schließen Schriftlicher Test",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -891,7 +891,7 @@
     "key": "test.back",
     "en": "Back to sections",
     "cs": "Zpět na části zkoušky",
-    "target": "Zurueck zu den Abschnitten",
+    "target": "Zurück zu den Abschnitten",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -955,7 +955,7 @@
     "key": "report.submit",
     "en": "Submit and close report",
     "cs": "Odeslat a uzavřít report",
-    "target": "Absenden und schliessen Bericht",
+    "target": "Absenden und schließen Bericht",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -963,7 +963,7 @@
     "key": "report.back",
     "en": "Back to sections",
     "cs": "Zpět na části zkoušky",
-    "target": "Zurueck zu den Abschnitten",
+    "target": "Zurück zu den Abschnitten",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -1011,7 +1011,7 @@
     "key": "candidate.identity.detailsTitle",
     "en": "Confirm personal details",
     "cs": "Potvrzení osobních údajů",
-    "target": "bestaetigen personal details",
+    "target": "bestätigen personal details",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -1051,7 +1051,7 @@
     "key": "candidate.identity.warning",
     "en": "Confirm identity before opening exam sections.",
     "cs": "Před otevřením částí zkoušky potvrďte identitu.",
-    "target": "Identitaet bestaetigen before opening Pruefungsabschnitte.",
+    "target": "Identitaet bestätigen before opening Pruefungsabschnitte.",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -1075,7 +1075,7 @@
     "key": "candidate.landing.helper",
     "en": "Review which sections are ready before opening work for this exam attempt.",
     "cs": "Zkontrolujte, které části jsou připravené, než otevřete práci pro tento pokus.",
-    "target": "pruefen which Abschnitte are bereit before opening work for this exam attempt.",
+    "target": "prüfen which Abschnitte are bereit before opening work for this exam attempt.",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -1115,7 +1115,7 @@
     "key": "candidate.section.confirmFirst",
     "en": "Confirm identity first.",
     "cs": "Nejprve potvrďte identitu.",
-    "target": "Identitaet bestaetigen first.",
+    "target": "Identitaet bestätigen first.",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -1131,7 +1131,7 @@
     "key": "candidate.section.open",
     "en": "This section is open.",
     "cs": "Tato část je otevřená.",
-    "target": "This Abschnitt is oeffnen.",
+    "target": "This Abschnitt is öffnen.",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -1227,7 +1227,7 @@
     "key": "examiner.identity.title",
     "en": "Confirm Examiner identity",
     "cs": "Potvrzení identity zkoušejícího",
-    "target": "bestaetigen Examiner Identitaet",
+    "target": "bestätigen Examiner Identitaet",
     "notes": "Protected term(s): Examiner. Do not translate unless explicitly approved during review.",
     "status": "needs_review"
   },
@@ -1259,7 +1259,7 @@
     "key": "examiner.identity.confirm",
     "en": "Confirm identity",
     "cs": "Potvrdit identitu",
-    "target": "Identitaet bestaetigen",
+    "target": "Identitaet bestätigen",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -1331,7 +1331,7 @@
     "key": "examiner.worklist.openOutdoor",
     "en": "Open outdoor form",
     "cs": "Otevřít outdoor formulář",
-    "target": "Outdoor-Formular oeffnen",
+    "target": "Outdoor-Formular öffnen",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -1395,7 +1395,7 @@
     "key": "outdoor.paperArchive.title",
     "en": "Paper management plan archive",
     "cs": "Archiv papírového management plánu",
-    "target": "Archiv fuer Papier-Managementplan",
+    "target": "Archiv für Papier-Managementplan",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -1475,7 +1475,7 @@
     "key": "outdoor.submit",
     "en": "Submit and close outdoor form",
     "cs": "Odeslat a uzavřít outdoor formulář",
-    "target": "Absenden und schliessen Outdoor form",
+    "target": "Absenden und schließen Outdoor form",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -1827,7 +1827,7 @@
     "key": "centre.access.title",
     "en": "Certification centre / Open delegated workspace",
     "cs": "Certifikační centrum / otevření delegovaného pracovního prostoru",
-    "target": "Zertifizierungszentrum / oeffnen delegated workspace",
+    "target": "Zertifizierungszentrum / öffnen delegated workspace",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -1835,7 +1835,7 @@
     "key": "centre.access.subtitle",
     "en": "Open workspace using Centre QR received from Admin.",
     "cs": "Otevřete pracovní prostor pomocí Centre QR získaného od Admina.",
-    "target": "oeffnen workspace using Centre QR received from Admin.",
+    "target": "öffnen workspace using Centre QR received from Admin.",
     "notes": "Protected term(s): Centre, Admin, Centre QR. Do not translate unless explicitly approved during review.",
     "status": "needs_review"
   },
@@ -1851,7 +1851,7 @@
     "key": "centre.access.open",
     "en": "Open centre workspace",
     "cs": "Otevřít pracovní prostor centra",
-    "target": "Zentrumsarbeitsbereich oeffnen",
+    "target": "Zentrumsarbeitsbereich öffnen",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -2267,7 +2267,7 @@
     "key": "centre.workflow.syncHelper",
     "en": "Use the sync queue panel to review sync status after smoke test.",
     "cs": "Po smoke testu použijte sync queue panel pro kontrolu stavu synchronizace.",
-    "target": "Use the sync queue panel to pruefen sync Status after smoke test.",
+    "target": "Use the sync queue panel to prüfen sync Status after smoke test.",
     "notes": "Protected term(s): sync queue. Do not translate unless explicitly approved during review.",
     "status": "needs_review"
   },
@@ -2443,7 +2443,7 @@
     "key": "status.centreQrRequired",
     "en": "Open the Centre portal with a valid Centre QR session, then try again.",
     "cs": "Otevřete portál Centra pomocí platné Centre QR session a zkuste to znovu.",
-    "target": "Oeffnen Sie das Centre Portal with a gueltig Centre QR Sitzung, then erneut versuchen.",
+    "target": "Öffnen Sie das Centre Portal with a gueltig Centre QR Sitzung, then erneut versuchen.",
     "notes": "Protected term(s): Centre, Centre QR. Do not translate unless explicitly approved during review.",
     "status": "needs_review"
   },
@@ -2483,7 +2483,7 @@
     "key": "status.centreAuditExport.sessionRequired",
     "en": "Open the Centre portal with a valid Centre QR session before downloading the Audit Package.",
     "cs": "Před stažením Audit Package otevřete portál Centra pomocí platné Centre QR session.",
-    "target": "Oeffnen Sie das Centre Portal with a gueltig Centre QR Sitzung before downloading the Audit Paket.",
+    "target": "Öffnen Sie das Centre Portal with a gueltig Centre QR Sitzung before downloading the Audit Paket.",
     "notes": "Protected term(s): Centre, Centre QR. Do not translate unless explicitly approved during review.",
     "status": "needs_review"
   },
@@ -2523,7 +2523,7 @@
     "key": "status.evaluation.previewSessionRequired",
     "en": "Open this portal with a valid QR session before loading the evaluation preview.",
     "cs": "Před načtením náhledu vyhodnocení otevřete tento portál pomocí platné QR session.",
-    "target": "oeffnen this Portal with a gueltig QR Sitzung before laedt the Bewertungsvorschau.",
+    "target": "öffnen this Portal with a gueltig QR Sitzung before laedt the Bewertungsvorschau.",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -2539,7 +2539,7 @@
     "key": "status.export.sessionRequired",
     "en": "Open this portal with a valid QR session before downloading the Draft Export.",
     "cs": "Před stažením pracovního exportu otevřete tento portál pomocí platné QR session.",
-    "target": "oeffnen this Portal with a gueltig QR Sitzung before downloading the Draft Export.",
+    "target": "öffnen this Portal with a gueltig QR Sitzung before downloading the Draft Export.",
     "notes": "Protected term(s): Draft Export. Do not translate unless explicitly approved during review.",
     "status": "needs_review"
   },
@@ -2643,7 +2643,7 @@
     "key": "common.open",
     "en": "Open",
     "cs": "Otevřít",
-    "target": "oeffnen",
+    "target": "öffnen",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -2651,7 +2651,7 @@
     "key": "common.close",
     "en": "Close",
     "cs": "Zavřít",
-    "target": "schliessen",
+    "target": "schließen",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -2707,7 +2707,7 @@
     "key": "common.confirm",
     "en": "Confirm",
     "cs": "Potvrdit",
-    "target": "bestaetigen",
+    "target": "bestätigen",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -2731,7 +2731,7 @@
     "key": "common.review",
     "en": "Review",
     "cs": "Zkontrolovat",
-    "target": "pruefen",
+    "target": "prüfen",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -2819,7 +2819,7 @@
     "key": "admin.openExam.title",
     "en": "Admin / Open exam event",
     "cs": "Admin / otevření zkušební události",
-    "target": "Admin / oeffnen Pruefungsereignis",
+    "target": "Admin / öffnen Pruefungsereignis",
     "notes": "Protected term(s): Admin. Do not translate unless explicitly approved during review.",
     "status": "needs_review"
   },
@@ -2915,7 +2915,7 @@
     "key": "admin.multilingual.needsReview",
     "en": "needs review",
     "cs": "vyžaduje kontrolu",
-    "target": "braucht Pruefung",
+    "target": "braucht Prüfung",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
@@ -2995,7 +2995,7 @@
     "key": "sectionStatus.open",
     "en": "open",
     "cs": "otevřeno",
-    "target": "oeffnen",
+    "target": "öffnen",
     "notes": "Draft target intentionally blank for reviewer translation.",
     "status": "needs_review"
   },
