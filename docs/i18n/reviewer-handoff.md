@@ -2,7 +2,7 @@
 
 ## Scope
 
-The translation review packs are documentation/data export files only. German, Italian, Swedish, Croatian, Dutch, Norwegian, French, and Spanish are not live UI languages yet, and reviewing these files does not enable any runtime language.
+The translation review packs are documentation/data export files only. German, Italian, Swedish, Croatian, Dutch, Norwegian, French, Spanish, and Romanian are not live UI languages yet, and reviewing these files does not enable any runtime language.
 
 ## Files to review
 
@@ -15,8 +15,8 @@ Review one language at a time. Use one CSV per language as the normal reviewer h
 - nl Dutch: `docs/i18n/nl-translation-pack.csv`
 - no Norwegian: `docs/i18n/no-translation-pack.csv`
 - fr French: `docs/i18n/fr-translation-pack.csv`
-- es Spanish
-- ro Romanian: `docs/i18n/es-translation-pack.csv`
+- es Spanish: `docs/i18n/es-translation-pack.csv`
+- ro Romanian: `docs/i18n/ro-translation-pack.csv`
 
 JSON files with the same language prefix contain the same rows and may be used by maintainers for technical inspection.
 
@@ -36,6 +36,8 @@ Do not change:
 - `notes`
 
 The current CSV header is `key,en,cs,target,notes,status`. Keep field names, commas, quotes, UTF-8 encoding, and row order unchanged.
+
+Targets are now prefilled draft suggestions. They still require human review before any row can move beyond `needs_review`.
 
 ## Status values
 
@@ -146,6 +148,7 @@ node scripts/validate-i18n-pack.mjs docs/i18n/nl-translation-pack.json
 node scripts/validate-i18n-pack.mjs docs/i18n/no-translation-pack.json
 node scripts/validate-i18n-pack.mjs docs/i18n/fr-translation-pack.json
 node scripts/validate-i18n-pack.mjs docs/i18n/es-translation-pack.json
+node scripts/validate-i18n-pack.mjs docs/i18n/ro-translation-pack.json
 ```
 
 The validator checks only importable rows marked `approved`. Human review is still required for linguistic quality.

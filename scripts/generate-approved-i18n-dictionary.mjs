@@ -44,7 +44,7 @@ const protectedTerms = [
 ];
 
 const allowedStatuses = new Set(["needs_review", "approved", "rejected", "needs_discussion"]);
-const supportedLanguages = new Set(["de", "it", "sv", "hr", "nl", "no", "fr", "es"]);
+const supportedLanguages = new Set(["de", "it", "sv", "hr", "nl", "no", "fr", "es", "ro"]);
 const outputDir = path.join("docs", "i18n", "generated");
 
 function readJson(filePath) {
