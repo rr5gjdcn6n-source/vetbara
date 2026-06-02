@@ -679,6 +679,24 @@ Object.assign(translations.cs, {
 });
 
 
+
+Object.assign(translations.en, {
+  "centre.assignments.title": "Examiner assignments",
+  "centre.assignments.candidate": "Candidate",
+  "centre.assignments.level": "Level",
+  "centre.assignments.primary": "Primary Examiner",
+  "centre.assignments.secondary": "Secondary Examiner"
+});
+
+Object.assign(translations.cs, {
+  "centre.assignments.title": "Přiřazení zkoušejících",
+  "centre.assignments.candidate": "Kandidát",
+  "centre.assignments.level": "Úroveň",
+  "centre.assignments.primary": "Primary Examiner",
+  "centre.assignments.secondary": "Secondary Examiner"
+});
+
+
 export function makeTranslator(language) {
   return function t(key) {
     return translations[language]?.[key] ?? translations.en[key] ?? key;
