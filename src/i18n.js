@@ -461,6 +461,94 @@ Object.assign(translations.cs, {
 });
 
 
+
+Object.assign(translations.en, {
+  "scoring.title": "Examiner / Candidate scoring and evaluation",
+  "scoring.subtitle": "Scoring engine uses the candidate level.",
+  "scoring.status": "Status",
+  "scoring.written": "Written",
+  "scoring.outdoor": "Outdoor",
+  "scoring.report": "Report",
+  "scoring.total": "Total",
+  "scoring.percentage": "Percentage",
+  "scoring.result": "Result",
+  "scoring.pass": "PASS",
+  "scoring.notPassed": "NOT PASSED",
+  "scoring.generate": "Generate Evaluation",
+  "scoring.loadPreview": "Load Evaluation Preview",
+  "scoring.loading": "Loading...",
+  "scoring.downloadDraftExport": "Download Draft Export (.xls)",
+  "scoring.exporting": "Exporting...",
+  "scoring.draftOnly": "Draft Export only — not the official VETcert evaluation template.",
+  "scoring.lastGenerated": "Last generated evaluation",
+
+  "evaluation.preview.title": "Evaluation preview",
+  "evaluation.preview.helper": "Backend-loaded preview of the current Candidate evaluation data.",
+  "evaluation.preview.summary": "Summary",
+  "evaluation.preview.written": "Written",
+  "evaluation.preview.outdoor": "Outdoor",
+  "evaluation.preview.report": "Report",
+  "evaluation.preview.total": "Total",
+  "evaluation.preview.percentage": "Percentage",
+  "evaluation.preview.result": "Result",
+  "evaluation.preview.outdoorScores": "Outdoor scores",
+  "evaluation.preview.reportSummary": "Report summary",
+  "evaluation.preview.hasReportDraft": "Report draft",
+  "evaluation.preview.treesWithContent": "Trees with content",
+  "evaluation.preview.fieldNotesFilled": "Field notes filled",
+  "evaluation.preview.finalSectionsFilled": "Final sections filled",
+  "evaluation.preview.photoPlaceholders": "Photo placeholders",
+  "evaluation.preview.submitted": "Submitted",
+  "evaluation.preview.primaryScores": "Primary scores",
+  "evaluation.preview.secondaryScores": "Secondary scores",
+  "evaluation.preview.yes": "yes",
+  "evaluation.preview.no": "no"
+});
+
+Object.assign(translations.cs, {
+  "scoring.title": "Zkoušející / skórování a vyhodnocení kandidáta",
+  "scoring.subtitle": "Skórovací engine používá úroveň kandidáta.",
+  "scoring.status": "Stav",
+  "scoring.written": "Písemný test",
+  "scoring.outdoor": "Outdoor",
+  "scoring.report": "Report",
+  "scoring.total": "Celkem",
+  "scoring.percentage": "Procenta",
+  "scoring.result": "Výsledek",
+  "scoring.pass": "PASS",
+  "scoring.notPassed": "NOT PASSED",
+  "scoring.generate": "Vygenerovat vyhodnocení",
+  "scoring.loadPreview": "Načíst náhled vyhodnocení",
+  "scoring.loading": "Načítám...",
+  "scoring.downloadDraftExport": "Stáhnout pracovní export (.xls)",
+  "scoring.exporting": "Exportuji...",
+  "scoring.draftOnly": "Pouze pracovní export — nejde o oficiální šablonu vyhodnocení VETcert.",
+  "scoring.lastGenerated": "Poslední vygenerované vyhodnocení",
+
+  "evaluation.preview.title": "Náhled vyhodnocení",
+  "evaluation.preview.helper": "Backendový náhled aktuálních dat vyhodnocení kandidáta.",
+  "evaluation.preview.summary": "Souhrn",
+  "evaluation.preview.written": "Písemný test",
+  "evaluation.preview.outdoor": "Outdoor",
+  "evaluation.preview.report": "Report",
+  "evaluation.preview.total": "Celkem",
+  "evaluation.preview.percentage": "Procenta",
+  "evaluation.preview.result": "Výsledek",
+  "evaluation.preview.outdoorScores": "Outdoor skóre",
+  "evaluation.preview.reportSummary": "Souhrn reportu",
+  "evaluation.preview.hasReportDraft": "Návrh reportu",
+  "evaluation.preview.treesWithContent": "Stromy s obsahem",
+  "evaluation.preview.fieldNotesFilled": "Vyplněné terénní poznámky",
+  "evaluation.preview.finalSectionsFilled": "Vyplněné finální sekce",
+  "evaluation.preview.photoPlaceholders": "Foto placeholders",
+  "evaluation.preview.submitted": "Odesláno",
+  "evaluation.preview.primaryScores": "Primary skóre",
+  "evaluation.preview.secondaryScores": "Secondary skóre",
+  "evaluation.preview.yes": "ano",
+  "evaluation.preview.no": "ne"
+});
+
+
 export function makeTranslator(language) {
   return function t(key) {
     return translations[language]?.[key] ?? translations.en[key] ?? key;
