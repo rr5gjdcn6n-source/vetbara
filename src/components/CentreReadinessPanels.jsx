@@ -34,3 +34,18 @@ export function PilotRunSummary({ centreValidationIssues, centreSetupDirty, test
   return <div className="mt-4 rounded-2xl border bg-white p-4 text-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">Pilot run summary</h3><p className="mt-1 text-slate-600">Use this summary before sharing Candidate or Examiner QR links.</p></div><StatusPill tone={qrDistributionReady && !hasValidationErrors && testImportSummary ? "good" : "warn"}>{qrDistributionReady && !hasValidationErrors && testImportSummary ? "ready" : "review"}</StatusPill></div><div className="mt-3 grid gap-2 md:grid-cols-2 lg:grid-cols-5">{rows.map(([label, value, tone]) => <div key={label} className="rounded-xl bg-slate-100 p-3"><div className="mb-2 text-xs font-medium text-slate-500">{label}</div><StatusPill tone={tone}>{value}</StatusPill></div>)}</div></div>;
 }
 
+export function CentreNetworkReadinessChecklist({ StatusPill }) {
+  const items = [
+    "Stable Wi-Fi/router is running",
+    "Internet access works on tablets",
+    "Deployed VetBara URL opens on tablets",
+    "Centre QR/session opens",
+    "Candidate QR opens on a tablet",
+    "Examiner QR opens on a tablet",
+    "Save/Load Centre Setup tested",
+    "Sync/Audit panel checked",
+    "Export download tested",
+  ];
+
+  return <div className="mt-4 rounded-2xl border bg-white p-4 text-sm"><div className="mb-3 flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">Network readiness checklist</h3><p className="mt-1 text-slate-600">Use this before distributing Candidate QR and Examiner QR links during a pilot session.</p></div><StatusPill>Guidance only</StatusPill></div><div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">{items.map((item) => <div key={item} className="rounded-xl bg-slate-100 p-3 text-slate-700">{item}</div>)}</div></div>;
+}
