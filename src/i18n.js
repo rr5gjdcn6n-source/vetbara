@@ -1,4 +1,4 @@
-  "report.photoOpenFullscreen": "Dvojklikem otevřít na celou obrazovku",\  "report.photoFullscreenHelper": "Obrázek můžete na iPadu přiblížit gestem pinch zoom.",\nnimport { draftRuntimeDictionaries } from "./generated/draft-i18n-dictionaries.js";
+import { draftRuntimeDictionaries } from "./generated/draft-i18n-dictionaries.js";
 
 export const LANGUAGES = [
   { code: "cs", label: "Čeština" },
@@ -378,6 +378,8 @@ Object.assign(translations.en, {
   "report.fieldNotesPrivateHelper": "Pracovní terénní poznámky. Nevstupují automaticky do finálního reportu.",
   "report.fieldNotesPrivate": "Terénní poznámky (nevstupují do reportu)",
   "report.photoUseInReport": "Použít v reportu",
+  "report.photoOpenFullscreen": "Dvojklikem otevřít na celou obrazovku",
+  "report.photoFullscreenHelper": "Obrázek můžete na iPadu přiblížit gestem pinch zoom.",
   "report.photoDescriptionPlaceholder": "Krátký popis, max. 100 znaků",
   "report.photoDescription": "Popis fotografie",
 });
