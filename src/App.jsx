@@ -610,7 +610,13 @@ export default function VetBaraPrototype() {
 
   function demoAccess(parsed) {
     if (parsed.role === "Centre" && parsed.token === DEMO_QR_TOKENS.Centre) return { role: "Centre", subjectId: centre, mode: "demo" };
-    if (parsed.role === "Candidate" && parsed.token === DEMO_QR_TOKENS.Candidate && parsed.id === "C-001") return { role: "Candidate", subjectId: parsed.id, mode: "demo", profile: { name: parsed.name, level: parsed.level } };
+    if (
+      parsed.role === "Candidate" &&
+      (
+        parsed.token === DEMO_QR_TOKENS.Candidate ||
+        parsed.token === `VETBARA-CANDIDATE-${parsed.id}-2026`
+      )
+    ) return { role: "Candidate", subjectId: parsed.id, mode: "demo", profile: { name: parsed.name, level: parsed.level } };
     if (parsed.role === "Examiner" && parsed.token === DEMO_QR_TOKENS.Examiner && parsed.id === "E-001" && knownExaminer(parsed.id)) return { role: "Examiner", subjectId: parsed.id, mode: "demo" };
     return null;
   }
