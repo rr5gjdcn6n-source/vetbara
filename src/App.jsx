@@ -1088,7 +1088,13 @@ export default function VetBaraPrototype() {
   function openCandidateSection(key) {
     if (!loggedCandidate || !candidateConfirmed[loggedCandidate.id]) return;
     const current = candidateStatus[loggedCandidate.id]?.[key];
-    if (current === "closed" && !window.confirm("This section is already closed. Reopening requires examiner approval. Has an examiner approved this reopening?")) return;
+    if (current === "closed") {
+      const password = window.prompt("Pro znovuotevření uzavřené části zadejte schvalovací heslo:");
+      if (password !== "arbovet") {
+        window.alert("Neplatné heslo. Znovuotevření nebylo povoleno.");
+        return;
+      }
+    }
     const openedAt = nowStamp();
     const openedAtIso = new Date().toISOString();
     setCandidateStatus((prev) => ({ ...prev, [loggedCandidate.id]: { ...(prev[loggedCandidate.id] ?? createSectionStatus(loggedCandidate.level)), [key]: "open" } }));
@@ -1477,6 +1483,7 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
   const [photoStatus, setPhotoStatus] = useState("");
   const [fieldNotesFullscreen, setFieldNotesFullscreen] = useState(false);
   const [handwritingOpen, setHandwritingOpen] = useState(false);
+  const [fullscreenPhoto, setFullscreenPhoto] = useState(null);
   const [fullscreenNotesHeight, setFullscreenNotesHeight] = useState(55);
   const [savedScrollY, setSavedScrollY] = useState(0);
   const canvasRef = useRef(null);
@@ -1589,9 +1596,9 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
   }
 
   function beginHandwriting(event) {
+    if (!isStylusEvent(event)) return;
     event.preventDefault();
     event.stopPropagation();
-    if (!isStylusEvent(event)) return;
     const prepared = prepareCanvasContext();
     if (!prepared) return;
 
@@ -1603,9 +1610,9 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
   }
 
   function drawHandwriting(event) {
+    if (!drawingRef.current || !isStylusEvent(event)) return;
     event.preventDefault();
     event.stopPropagation();
-    if (!drawingRef.current || !isStylusEvent(event)) return;
     const prepared = prepareCanvasContext();
     if (!prepared) return;
 
@@ -1711,13 +1718,21 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
               return (
                 <div key={photo.id} className="rounded-xl border bg-white p-3">
                   <div className="flex items-center gap-3">
-                    <div className="h-16 w-16 overflow-hidden rounded-lg bg-slate-200">
+                    <button
+                      type="button"
+                      onDoubleClick={() => setFullscreenPhoto(photo)}
+                      onClick={() => {
+                        if (photo.type === "image/png" && String(photo.name || "").startsWith("handwriting-")) setFullscreenPhoto(photo);
+                      }}
+                      className="h-16 w-16 overflow-hidden rounded-lg bg-slate-200"
+                      title={label("report.photoOpenFullscreen", "Dvojklikem otevřít na celou obrazovku")}
+                    >
                       {photo.dataUrl ? (
                         <img src={photo.dataUrl} alt={photo.name || photo.caption || photo.id} className="h-full w-full object-cover" />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">{photo.id}</div>
                       )}
-                    </div>
+                    </button>
                     <div className="min-w-0 text-xs">
                       <div className="truncate font-medium text-slate-900">{photo.name || photo.caption || photo.id}</div>
                       <div className="text-slate-500">{photo.type || "image"} · {photo.size ? `${Math.round(photo.size / 1024)} KB` : ""}</div>
@@ -1819,18 +1834,34 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
         </div>
       )}
 
+      {fullscreenPhoto && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-slate-950 p-4 text-white">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="truncate text-lg font-semibold">{fullscreenPhoto.description || fullscreenPhoto.name || fullscreenPhoto.caption || fullscreenPhoto.id}</h3>
+              <p className="text-sm text-slate-300">{label("report.photoFullscreenHelper", "Obrázek můžete na iPadu přiblížit gestem pinch zoom.")}</p>
+            </div>
+            <Button onClick={() => setFullscreenPhoto(null)} variant="outline" className="rounded-2xl bg-white text-slate-950">
+              {t("common.close")}
+            </Button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto rounded-2xl bg-white p-2">
+            <img
+              src={fullscreenPhoto.dataUrl}
+              alt={fullscreenPhoto.description || fullscreenPhoto.name || fullscreenPhoto.caption || fullscreenPhoto.id}
+              className="mx-auto h-auto max-h-none max-w-none rounded-xl"
+              style={{ width: "100%", touchAction: "pinch-zoom" }}
+            />
+          </div>
+        </div>
+      )}
+
       {handwritingOpen && (
         <div
           className="fixed inset-0 z-50 flex flex-col bg-white p-4"
           onContextMenu={(event) => event.preventDefault()}
           onSelect={(event) => event.preventDefault()}
           onSelectCapture={(event) => event.preventDefault()}
-          onPointerDownCapture={(event) => {
-            if (event.target?.tagName === "CANVAS") {
-              event.preventDefault();
-              event.stopPropagation();
-            }
-          }}
           style={{
             WebkitUserSelect: "none",
             userSelect: "none",

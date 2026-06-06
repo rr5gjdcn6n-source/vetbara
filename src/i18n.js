@@ -1,4 +1,4 @@
-import { draftRuntimeDictionaries } from "./generated/draft-i18n-dictionaries.js";
+  "report.photoOpenFullscreen": "Dvojklikem otevřít na celou obrazovku",\  "report.photoFullscreenHelper": "Obrázek můžete na iPadu přiblížit gestem pinch zoom.",\nnimport { draftRuntimeDictionaries } from "./generated/draft-i18n-dictionaries.js";
 
 export const LANGUAGES = [
   { code: "cs", label: "Čeština" },
