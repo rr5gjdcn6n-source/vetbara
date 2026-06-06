@@ -1908,10 +1908,16 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
               <div className="text-lg font-semibold">Fotografie: {(tree.photos ?? []).length}</div>
               <p className="mt-1 text-sm text-slate-600">Fotografie se ukládají lokálně do návrhu reportu.</p>
             </div>
-            <label className="cursor-pointer rounded-2xl border bg-white px-5 py-3 text-sm font-semibold hover:bg-slate-50">
-              Přidat fotografii
-              <input type="file" accept="image/*" capture="environment" onChange={handlePhotoChange} className="hidden" />
-            </label>
+            <div className="flex flex-wrap gap-2">
+              <label className="cursor-pointer rounded-2xl border bg-white px-5 py-3 text-sm font-semibold hover:bg-slate-50">
+                Vyfotit fotografii
+                <input type="file" accept="image/*" capture="environment" onChange={handlePhotoChange} className="hidden" />
+              </label>
+              <label className="cursor-pointer rounded-2xl border bg-white px-5 py-3 text-sm font-semibold hover:bg-slate-50">
+                Vybrat z galerie
+                <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+              </label>
+            </div>
           </div>
 
           {photoStatus && <div className="mt-2 text-xs font-medium text-slate-600">{photoStatus}</div>}
