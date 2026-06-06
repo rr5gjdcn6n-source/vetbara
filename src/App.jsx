@@ -1546,46 +1546,83 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
     );
   }
 
-  function canvasPoint(event) {
+  function prepareCanvasContext() {
     const canvas = canvasRef.current;
+    if (!canvas) return null;
+
     const rect = canvas.getBoundingClientRect();
-    const source = event.touches?.[0] ?? event;
+    const ratio = window.devicePixelRatio || 1;
+    const targetWidth = Math.max(1, Math.round(rect.width * ratio));
+    const targetHeight = Math.max(1, Math.round(rect.height * ratio));
+
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      const previous = document.createElement("canvas");
+      previous.width = canvas.width;
+      previous.height = canvas.height;
+      previous.getContext("2d").drawImage(canvas, 0, 0);
+
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
+      const restored = canvas.getContext("2d");
+      restored.setTransform(1, 0, 0, 1, 0, 0);
+      restored.drawImage(previous, 0, 0, canvas.width, canvas.height);
+    }
+
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    return { canvas, ctx, rect };
+  }
+
+  function isStylusEvent(event) {
+    return event.pointerType === "pen";
+  }
+
+  function canvasPoint(event, rect) {
     return {
-      x: source.clientX - rect.left,
-      y: source.clientY - rect.top,
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
     };
   }
 
   function beginHandwriting(event) {
+    if (!isStylusEvent(event)) return;
     event.preventDefault();
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    const point = canvasPoint(event);
+    const prepared = prepareCanvasContext();
+    if (!prepared) return;
+
+    const point = canvasPoint(event, prepared.rect);
     drawingRef.current = true;
-    ctx.lineWidth = 3;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.moveTo(point.x, point.y);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    prepared.ctx.beginPath();
+    prepared.ctx.moveTo(point.x, point.y);
   }
 
   function drawHandwriting(event) {
-    if (!drawingRef.current) return;
+    if (!drawingRef.current || !isStylusEvent(event)) return;
     event.preventDefault();
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    const point = canvasPoint(event);
-    ctx.lineTo(point.x, point.y);
-    ctx.stroke();
+    const prepared = prepareCanvasContext();
+    if (!prepared) return;
+
+    const point = canvasPoint(event, prepared.rect);
+    prepared.ctx.lineTo(point.x, point.y);
+    prepared.ctx.stroke();
   }
 
-  function endHandwriting() {
+  function endHandwriting(event) {
+    if (event?.pointerType && !isStylusEvent(event)) return;
     drawingRef.current = false;
+    event?.currentTarget?.releasePointerCapture?.(event.pointerId);
   }
 
   function clearHandwriting() {
     const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext("2d");
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
@@ -1784,7 +1821,7 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
             <div>
               <h3 className="text-lg font-semibold">{label("report.openHandwriting", "Rukopisné poznámky")}</h3>
               <p className="text-sm text-slate-600">
-                {label("report.handwritingHelper", "Pište stylusem do plátna. Uloží se jako pracovní obrázek mezi fotografie, ve výchozím stavu nepoužitý v reportu.")}
+                {label("report.handwritingHelper", "Pište pouze stylusem do plátna. Dotyk prstem je ignorován kvůli ochraně před nechtěným kreslením dlaní.")}
               </p>
             </div>
             <div className="flex gap-2">
@@ -1795,16 +1832,18 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
           </div>
           <canvas
             ref={canvasRef}
-            width={1400}
-            height={900}
             onPointerDown={beginHandwriting}
             onPointerMove={drawHandwriting}
             onPointerUp={endHandwriting}
             onPointerCancel={endHandwriting}
-            onTouchStart={beginHandwriting}
-            onTouchMove={drawHandwriting}
-            onTouchEnd={endHandwriting}
+            onPointerLeave={endHandwriting}
             className="min-h-0 flex-1 touch-none rounded-2xl border bg-white"
+            style={{
+              touchAction: "none",
+              WebkitUserSelect: "none",
+              userSelect: "none",
+              WebkitTouchCallout: "none",
+            }}
           />
         </div>
       )}

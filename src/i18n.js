@@ -367,11 +367,11 @@ Object.assign(translations.en, {
   "report.addPhotoShort": "Add photo",
   "report.photoAdded": "Photo added to the report draft.",
   "report.photoError": "Photo could not be loaded. Try another image.",
-  "report.fieldPlaceholder": "Field observations and rough notes..."
+  "report.fieldPlaceholder": "Field observations and rough notes...",
   "report.handwritingSaved": "Rukopisné poznámky byly uloženy mezi fotografie.",
   "report.saveHandwriting": "Uložit rukopis",
   "report.clearHandwriting": "Vymazat",
-  "report.handwritingHelper": "Pište stylusem do plátna. Uloží se jako pracovní obrázek mezi fotografie, ve výchozím stavu nepoužitý v reportu.",
+  "report.handwritingHelper": "Pište pouze stylusem do plátna. Dotyk prstem je ignorován kvůli ochraně před nechtěným kreslením dlaní.",
   "report.openHandwriting": "Rukopisné poznámky",
   "report.openFullscreen": "Otevřít na celou obrazovku",
   "report.fieldNotesFullscreenHelper": "Velký editor. Výšku pole upravíte posuvníkem vlevo.",
