@@ -1744,18 +1744,38 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
   const draft = reportDrafts[candidate.id] ?? createReportDraft();
   const tree = draft[activeReportTree];
   const [photoStatus, setPhotoStatus] = useState("");
-  const [fieldNotesFullscreen, setFieldNotesFullscreen] = useState(false);
-  const [handwritingOpen, setHandwritingOpen] = useState(false);
-  const [fullscreenPhoto, setFullscreenPhoto] = useState(null);
-  const [fullscreenNotesHeight, setFullscreenNotesHeight] = useState(55);
-  const [savedScrollY, setSavedScrollY] = useState(0);
-  const canvasRef = useRef(null);
-  const drawingRef = useRef(false);
+  const [reportStep, setReportStep] = useState("field");
+  const [photoViewer, setPhotoViewer] = useState(null);
 
   const label = (key, fallback) => {
     const translated = t(key);
     return translated === key ? fallback : translated;
   };
+
+  const localKey = `vetbara-report-field-backup-${candidate.id}-${activeReportTree}`;
+
+  useEffect(() => {
+    const backup = {
+      candidateId: candidate.id,
+      tree: activeReportTree,
+      fieldNotes: tree.fieldNotes ?? "",
+      photos: tree.photos ?? [],
+      savedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(localKey, JSON.stringify(backup));
+  }, [candidate.id, activeReportTree, tree.fieldNotes, tree.photos, localKey]);
+
+  function saveFieldDataLocally() {
+    const backup = {
+      candidateId: candidate.id,
+      tree: activeReportTree,
+      fieldNotes: tree.fieldNotes ?? "",
+      photos: tree.photos ?? [],
+      savedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(localKey, JSON.stringify(backup));
+    setPhotoStatus(`Lokálně uloženo: ${new Date().toLocaleTimeString()}`);
+  }
 
   function handlePhotoChange(event) {
     const input = event.target;
@@ -1790,391 +1810,229 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
     reader.readAsDataURL(file);
   }
 
-  function openFieldNotesFullscreen() {
-    setSavedScrollY(window.scrollY || 0);
-    setFieldNotesFullscreen(true);
-  }
-
-  function closeFieldNotesFullscreen() {
-    setFieldNotesFullscreen(false);
-    window.setTimeout(() => window.scrollTo({ top: savedScrollY, behavior: "smooth" }), 0);
-  }
-
-  function fieldNotesTextarea(className, style = {}) {
-    return (
-      <textarea
-        value={tree.fieldNotes}
-        onChange={(e) => updateReport(activeReportTree, "fieldNotes", e.target.value, "fieldNotes")}
-        placeholder={label("report.fieldPlaceholder", "Terénní pozorování a pracovní poznámky...")}
-        className={className}
-        style={{ resize: "vertical", ...style }}
-        autoCapitalize="sentences"
-        autoComplete="off"
-        spellCheck="true"
-        inputMode="text"
-      />
-    );
-  }
-
-  function prepareCanvasContext() {
-    const canvas = canvasRef.current;
-    if (!canvas) return null;
-
-    const rect = canvas.getBoundingClientRect();
-    const ratio = window.devicePixelRatio || 1;
-    const targetWidth = Math.max(1, Math.round(rect.width * ratio));
-    const targetHeight = Math.max(1, Math.round(rect.height * ratio));
-
-    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-      const previous = document.createElement("canvas");
-      previous.width = canvas.width;
-      previous.height = canvas.height;
-      previous.getContext("2d").drawImage(canvas, 0, 0);
-
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
-
-      const restored = canvas.getContext("2d");
-      restored.setTransform(1, 0, 0, 1, 0, 0);
-      restored.drawImage(previous, 0, 0, canvas.width, canvas.height);
-    }
-
-    const ctx = canvas.getContext("2d");
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    ctx.lineWidth = 3;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    return { canvas, ctx, rect };
-  }
-
-  function isStylusEvent(event) {
-    return event.pointerType === "pen";
-  }
-
-  function canvasPoint(event, rect) {
-    return {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    };
-  }
-
-  function beginHandwriting(event) {
-    if (!isStylusEvent(event)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const prepared = prepareCanvasContext();
-    if (!prepared) return;
-
-    const point = canvasPoint(event, prepared.rect);
-    drawingRef.current = true;
-    prepared.canvas.setPointerCapture?.(event.pointerId);
-    prepared.ctx.beginPath();
-    prepared.ctx.moveTo(point.x, point.y);
-  }
-
-  function drawHandwriting(event) {
-    if (!drawingRef.current || !isStylusEvent(event)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const prepared = prepareCanvasContext();
-    if (!prepared) return;
-
-    const point = canvasPoint(event, prepared.rect);
-    prepared.ctx.lineTo(point.x, point.y);
-    prepared.ctx.stroke();
-  }
-
-  function endHandwriting(event) {
-    event?.preventDefault?.();
-    event?.stopPropagation?.();
-    if (event?.pointerType && !isStylusEvent(event)) return;
-    drawingRef.current = false;
-    canvasRef.current?.releasePointerCapture?.(event.pointerId);
-  }
-
-  function clearHandwriting() {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  }
-
-  function saveHandwritingAsPhoto() {
-    const canvas = canvasRef.current;
-    const dataUrl = canvas.toDataURL("image/png");
-    addReportPhoto(activeReportTree, {
-      name: `handwriting-${activeReportTree}-${Date.now()}.png`,
-      type: "image/png",
-      size: Math.round((dataUrl.length * 3) / 4),
-      dataUrl,
-      description: "Rukopisné terénní poznámky",
-      useInReport: false,
-      createdAt: new Date().toISOString(),
-    });
-    clearHandwriting();
-    setHandwritingOpen(false);
-    setPhotoStatus(label("report.handwritingSaved", "Rukopisné poznámky byly uloženy mezi fotografie."));
-  }
-
-  function reportTreeCompleteness(treeName) {
-    const reportTree = draft[treeName] ?? { finalSections: {}, photos: [] };
-    const filled = REPORT_SECTIONS.filter((section) => String(reportTree.finalSections?.[section.key] ?? "").trim()).length;
-    const photosForReport = (reportTree.photos ?? []).filter((photo) => photo.useInReport ?? true);
-    const annotatedPhotos = photosForReport.filter((photo) => String(photo.description ?? "").trim()).length;
-
-    return {
-      filled,
-      total: REPORT_SECTIONS.length,
-      photosForReport: photosForReport.length,
-      annotatedPhotos,
-    };
-  }
-
   function handleSubmitReport() {
-    const treeA = reportTreeCompleteness("Tree A");
-    const treeB = reportTreeCompleteness("Tree B");
-
     const confirmed = window.confirm(
-      `Kontrola před odesláním reportu\n\nJe vyplněný report pro oba dva stromy (A+B)?\n\nStrom A: ${treeA.filled}/${treeA.total} sekcí\nStrom B: ${treeB.filled}/${treeB.total} sekcí\n\nJsou anotované fotografie k použití v reportu?\n\nStrom A: ${treeA.annotatedPhotos}/${treeA.photosForReport} anotovaných fotografií označených pro report\nStrom B: ${treeB.annotatedPhotos}/${treeB.photosForReport} anotovaných fotografií označených pro report\n\nPo potvrzení bude report odeslán a uzavřen.`
+      "Kontrola před odesláním reportu\n\nJe vyplněný report pro oba dva stromy (A+B)?\n\nJsou anotované fotografie k použití v reportu?\n\nPo potvrzení bude report odeslán a uzavřen."
     );
-
     if (!confirmed) return;
     submitReport();
   }
 
-  return (
-    <div className="rounded-2xl border bg-white p-4">
-      <h3 className="font-semibold">{t("report.titleFull")}</h3>
-      <p className="mt-1 text-sm text-slate-600">{t("report.helper")}</p>
-
-      <div className="mt-3 flex gap-2">
+  function TreeTabs() {
+    return (
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {REPORT_TREES.map((treeName) => (
-          <Button
+          <button
             key={treeName}
-            variant={activeReportTree === treeName ? "default" : "outline"}
+            type="button"
             onClick={() => setActiveReportTree(treeName)}
-            className="rounded-2xl"
+            className={`rounded-2xl border p-4 text-left text-xl font-bold ${
+              activeReportTree === treeName
+                ? "border-slate-950 bg-slate-950 text-white"
+                : "border-slate-300 bg-white text-slate-950"
+            }`}
           >
             {treeName}
-          </Button>
-        ))}
-      </div>
-
-      <div className="mt-3 rounded-xl bg-slate-100 p-3 text-sm">
-        {t("report.photos")}: <strong>{tree.photos.length}</strong>
-        <p className="mt-2 text-xs text-slate-500">{t("report.photoHelper")}</p>
-
-        <label className="mt-3 inline-flex w-full cursor-pointer items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50">
-          {t("report.addPhotoShort")}
-          <input type="file" accept="image/*" capture="environment" onChange={handlePhotoChange} className="hidden" />
-        </label>
-
-        {photoStatus && <div className="mt-2 text-xs font-medium text-slate-600">{photoStatus}</div>}
-
-        {tree.photos.length > 0 && (
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {tree.photos.map((photo) => {
-              const description = photo.description ?? "";
-              const useInReport = photo.useInReport ?? true;
-
-              return (
-                <div key={photo.id} className="rounded-xl border bg-white p-3">
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onDoubleClick={() => setFullscreenPhoto(photo)}
-                      onClick={() => setFullscreenPhoto(photo)}
-                      className="h-16 w-16 overflow-hidden rounded-lg bg-slate-200"
-                      title={label("report.photoOpenFullscreen", "Dvojklikem otevřít na celou obrazovku")}
-                    >
-                      {photo.dataUrl ? (
-                        <img src={photo.dataUrl} alt={photo.name || photo.caption || photo.id} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">{photo.id}</div>
-                      )}
-                    </button>
-                    <div className="min-w-0 text-xs">
-                      <div className="truncate font-medium text-slate-900">{photo.name || photo.caption || photo.id}</div>
-                      <div className="text-slate-500">{photo.type || "image"} · {photo.size ? `${Math.round(photo.size / 1024)} KB` : ""}</div>
-                    </div>
-                  </div>
-
-                  <label className="mt-3 block text-xs font-medium text-slate-600">
-                    {label("report.photoDescription", "Popis fotografie")}
-                    <input
-                      value={description}
-                      maxLength={100}
-                      onChange={(e) => updateReportPhoto(activeReportTree, photo.id, { description: e.target.value.slice(0, 100) })}
-                      placeholder={label("report.photoDescriptionPlaceholder", "Krátký popis, max. 100 znaků")}
-                      className="mt-1 w-full rounded-xl border bg-white p-2 text-sm text-slate-950"
-                    />
-                    <span className="mt-1 block text-right text-[11px] text-slate-500">{description.length}/100</span>
-                  </label>
-
-                  <label className="mt-2 flex items-center gap-2 text-xs font-medium text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={useInReport}
-                      onChange={(e) => updateReportPhoto(activeReportTree, photo.id, { useInReport: e.target.checked })}
-                    />
-                    {label("report.photoUseInReport", "Použít v reportu")}
-                  </label>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="sticky top-3 z-10 mt-3 rounded-xl border bg-white p-3 shadow-sm">
-        <div className="flex items-center justify-between gap-3">
-          <label className="text-sm font-semibold">
-            {label("report.fieldNotesPrivate", "Terénní poznámky (nevstupují do reportu)")}
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={openFieldNotesFullscreen} variant="outline" className="rounded-2xl">
-              {label("report.openFullscreen", "Otevřít na celou obrazovku")}
-            </Button>
-            <Button onClick={() => setHandwritingOpen(true)} variant="outline" className="rounded-2xl">
-              {label("report.openHandwriting", "Rukopisné poznámky")}
-            </Button>
-          </div>
-        </div>
-        <p className="mt-1 text-xs text-slate-500">
-          {label("report.fieldNotesPrivateHelper", "Pracovní terénní poznámky. Nevstupují automaticky do finálního reportu.")}
-        </p>
-        {fieldNotesTextarea("mt-2 min-h-32 w-full rounded-xl border bg-white p-3 text-sm", { minHeight: "180px", maxHeight: "70vh" })}
-      </div>
-
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
-        {REPORT_SECTIONS.map((sec) => (
-          <label key={sec.key} className="text-sm font-medium">
-            {sec.title}
-            <textarea
-              value={tree.finalSections[sec.key] ?? ""}
-              onChange={(e) => updateReport(activeReportTree, sec.key, e.target.value)}
-              placeholder={`${activeReportTree}: ${sec.title}`}
-              className="mt-1 min-h-20 w-full rounded-xl border bg-white p-3 text-sm"
-            />
-          </label>
-        ))}
-      </div>
-
-      <Button onClick={handleSubmitReport} className="mt-4 rounded-2xl">
-        <Lock className="mr-2 h-4 w-4" /> {t("report.submit")}
-      </Button>
-      <p className="mt-2 text-xs text-slate-500">{t("common.offlineRetry")}</p>
-
-      {fieldNotesFullscreen && (
-        <div className="fixed inset-0 z-50 flex bg-white">
-          <div className="flex w-12 items-center justify-center border-r bg-slate-50 p-2">
-            <input
-              type="range"
-              min="35"
-              max="85"
-              value={fullscreenNotesHeight}
-              onChange={(e) => setFullscreenNotesHeight(Number(e.target.value))}
-              className="h-64 rotate-[-90deg]"
-            />
-          </div>
-          <div className="flex flex-1 flex-col p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold">{label("report.fieldNotesPrivate", "Terénní poznámky (nevstupují do reportu)")}</h3>
-                <p className="text-sm text-slate-600">
-                  {label("report.fieldNotesFullscreenHelper", "Velký editor. Výšku pole upravíte posuvníkem vlevo.")}
-                </p>
-              </div>
-              <Button onClick={closeFieldNotesFullscreen} variant="outline" className="rounded-2xl">
-                {t("common.close")}
-              </Button>
+            <div className={`mt-1 text-sm font-normal ${activeReportTree === treeName ? "text-slate-200" : "text-slate-500"}`}>
+              Fotografie: {(draft[treeName]?.photos ?? []).length} · poznámky: {String(draft[treeName]?.fieldNotes ?? "").trim() ? "ano" : "ne"}
             </div>
-            {fieldNotesTextarea("w-full rounded-2xl border bg-white p-4 text-lg leading-8", { height: `${fullscreenNotesHeight}vh` })}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  function PhotoGrid() {
+    return (
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        {(tree.photos ?? []).map((photo) => {
+          const description = photo.description ?? "";
+          const useInReport = photo.useInReport ?? true;
+
+          return (
+            <div key={photo.id} className="rounded-xl border bg-white p-3">
+              <button type="button" onClick={() => setPhotoViewer(photo)} className="flex w-full items-center gap-3 text-left">
+                <div className="h-20 w-20 overflow-hidden rounded-lg bg-slate-200">
+                  {photo.dataUrl ? (
+                    <img src={photo.dataUrl} alt={photo.name || photo.id} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">{photo.id}</div>
+                  )}
+                </div>
+                <div className="min-w-0 text-xs">
+                  <div className="truncate font-medium text-slate-900">{photo.name || photo.id}</div>
+                  <div className="text-slate-500">{photo.type || "image"} · {photo.size ? `${Math.round(photo.size / 1024)} KB` : ""}</div>
+                </div>
+              </button>
+
+              <label className="mt-3 block text-xs font-medium text-slate-600">
+                Popis fotografie
+                <input
+                  value={description}
+                  maxLength={100}
+                  onChange={(e) => updateReportPhoto(activeReportTree, photo.id, { description: e.target.value.slice(0, 100) })}
+                  placeholder="Krátký popis, max. 100 znaků"
+                  className="mt-1 w-full rounded-xl border bg-white p-2 text-sm text-slate-950"
+                />
+                <span className="mt-1 block text-right text-[11px] text-slate-500">{description.length}/100</span>
+              </label>
+
+              <label className="mt-2 flex items-center gap-2 text-xs font-medium text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={useInReport}
+                  onChange={(e) => updateReportPhoto(activeReportTree, photo.id, { useInReport: e.target.checked })}
+                />
+                Použít v reportu
+              </label>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function FieldCollectionStep() {
+    return (
+      <div className="rounded-2xl border bg-white p-4">
+        <h3 className="text-2xl font-bold">Krok 1: Terénní sběr dat</h3>
+        <p className="mt-1 text-sm text-slate-600">
+          Sbírejte pouze fotografie a terénní poznámky. Data se průběžně ukládají lokálně do tohoto zařízení.
+        </p>
+
+        <TreeTabs />
+
+        <div className="mt-4 rounded-2xl bg-slate-100 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-lg font-semibold">Fotografie: {(tree.photos ?? []).length}</div>
+              <p className="mt-1 text-sm text-slate-600">Fotografie se ukládají lokálně do návrhu reportu.</p>
+            </div>
+            <label className="cursor-pointer rounded-2xl border bg-white px-5 py-3 text-sm font-semibold hover:bg-slate-50">
+              Přidat fotografii
+              <input type="file" accept="image/*" capture="environment" onChange={handlePhotoChange} className="hidden" />
+            </label>
+          </div>
+
+          {photoStatus && <div className="mt-2 text-xs font-medium text-slate-600">{photoStatus}</div>}
+          {(tree.photos ?? []).length > 0 && <PhotoGrid />}
+        </div>
+
+        <div className="mt-4 rounded-2xl border bg-white p-4">
+          <h4 className="text-lg font-semibold">Terénní poznámky (nevstupují do reportu)</h4>
+          <p className="mt-1 text-sm text-slate-600">Tyto poznámky slouží jako pracovní podklad pro druhý krok.</p>
+          <textarea
+            value={tree.fieldNotes}
+            onChange={(e) => updateReport(activeReportTree, "fieldNotes", e.target.value, "fieldNotes")}
+            placeholder="Terénní pozorování a pracovní poznámky..."
+            className="mt-3 min-h-72 w-full rounded-xl border bg-white p-4 text-base"
+            style={{ resize: "vertical" }}
+            autoCapitalize="sentences"
+            autoComplete="off"
+            spellCheck="true"
+          />
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Button onClick={saveFieldDataLocally} variant="outline" className="rounded-2xl">
+            Ulož lokálně pro pozdější zpracování
+          </Button>
+          <Button onClick={() => setReportStep("write")} className="rounded-2xl">
+            Pokračovat psaním reportu
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  function ReportWritingStep() {
+    return (
+      <div className="fixed inset-0 z-50 overflow-auto bg-white p-5">
+        <div className="mx-auto max-w-7xl">
+          <div className="sticky top-0 z-10 mb-4 rounded-2xl border bg-white p-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-2xl font-bold">Krok 2: Psaní Consulting reportu</h3>
+                <p className="mt-1 text-sm text-slate-600">{candidate.name} · {activeReportTree}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => setReportStep("field")} variant="outline" className="rounded-2xl">
+                  Zpět do terénních dat
+                </Button>
+                <Button onClick={handleSubmitReport} className="rounded-2xl">
+                  <Lock className="mr-2 h-4 w-4" /> Odeslat a uzavřít report
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <TreeTabs />
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+            <div className="rounded-2xl border bg-slate-50 p-4">
+              <h4 className="font-semibold">Terénní poznámky</h4>
+              <div className="mt-2 max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-xl bg-white p-3 text-sm">
+                {String(tree.fieldNotes ?? "").trim() || "-"}
+              </div>
+
+              <h4 className="mt-4 font-semibold">Fotografie pro report</h4>
+              <div className="mt-2 space-y-2">
+                {(tree.photos ?? []).filter((photo) => photo.useInReport ?? true).map((photo) => (
+                  <button key={photo.id} type="button" onClick={() => setPhotoViewer(photo)} className="flex w-full items-center gap-3 rounded-xl border bg-white p-2 text-left">
+                    <div className="h-14 w-14 overflow-hidden rounded-lg bg-slate-200">
+                      {photo.dataUrl && <img src={photo.dataUrl} alt={photo.name || photo.id} className="h-full w-full object-cover" />}
+                    </div>
+                    <div className="min-w-0 text-xs">
+                      <div className="truncate font-medium">{photo.description || photo.name || photo.id}</div>
+                      <div className="text-slate-500">{photo.name}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="lg:col-span-2">
+              <div className="grid gap-3 md:grid-cols-2">
+                {REPORT_SECTIONS.map((sec) => (
+                  <label key={sec.key} className="text-sm font-medium">
+                    {sec.title}
+                    <textarea
+                      value={tree.finalSections[sec.key] ?? ""}
+                      onChange={(e) => updateReport(activeReportTree, sec.key, e.target.value)}
+                      placeholder={`${activeReportTree}: ${sec.title}`}
+                      className="mt-1 min-h-32 w-full rounded-xl border bg-white p-3 text-sm"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {fullscreenPhoto && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-slate-950 p-4 text-white">
+  return (
+    <>
+      {reportStep === "field" ? <FieldCollectionStep /> : <ReportWritingStep />}
+
+      {photoViewer && (
+        <div className="fixed inset-0 z-[60] flex flex-col bg-slate-950 p-4 text-white">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <h3 className="truncate text-lg font-semibold">{fullscreenPhoto.description || fullscreenPhoto.name || fullscreenPhoto.caption || fullscreenPhoto.id}</h3>
-              <p className="text-sm text-slate-300">{label("report.photoFullscreenHelper", "Obrázek můžete na iPadu přiblížit gestem pinch zoom.")}</p>
+              <h3 className="truncate text-lg font-semibold">{photoViewer.description || photoViewer.name || photoViewer.id}</h3>
+              <p className="text-sm text-slate-300">Fotografii lze na tabletu přiblížit gestem.</p>
             </div>
-            <Button onClick={() => setFullscreenPhoto(null)} variant="outline" className="rounded-2xl bg-white text-slate-950">
+            <Button onClick={() => setPhotoViewer(null)} variant="outline" className="rounded-2xl bg-white text-slate-950">
               {t("common.close")}
             </Button>
           </div>
-          <div
-            className="min-h-0 flex-1 overflow-auto rounded-2xl bg-white p-2"
-            style={{ touchAction: "pinch-zoom pan-x pan-y" }}
-          >
-            <img
-              src={fullscreenPhoto.dataUrl}
-              alt={fullscreenPhoto.description || fullscreenPhoto.name || fullscreenPhoto.caption || fullscreenPhoto.id}
-              className="mx-auto h-auto max-h-none max-w-none rounded-xl"
-              style={{
-                width: "100%",
-                maxWidth: "none",
-                touchAction: "pinch-zoom pan-x pan-y",
-                WebkitUserSelect: "none",
-                userSelect: "none",
-              }}
-            />
+          <div className="min-h-0 flex-1 overflow-auto rounded-2xl bg-white p-2" style={{ touchAction: "pinch-zoom pan-x pan-y" }}>
+            <img src={photoViewer.dataUrl} alt={photoViewer.description || photoViewer.name || photoViewer.id} className="mx-auto h-auto max-w-none rounded-xl" style={{ width: "100%" }} />
           </div>
         </div>
       )}
-
-      {handwritingOpen && (
-        <div
-          className="fixed inset-0 z-50 flex flex-col bg-white p-4"
-          onContextMenu={(event) => event.preventDefault()}
-          onSelect={(event) => event.preventDefault()}
-          onSelectCapture={(event) => event.preventDefault()}
-          style={{
-            WebkitUserSelect: "none",
-            userSelect: "none",
-            WebkitTouchCallout: "none",
-            touchAction: "none",
-          }}
-        >
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-semibold">{label("report.openHandwriting", "Rukopisné poznámky")}</h3>
-              <p className="text-sm text-slate-600">
-                {label("report.handwritingHelper", "Pište pouze stylusem do plátna. Dotyk prstem je ignorován kvůli ochraně před nechtěným kreslením dlaní.")}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={clearHandwriting} variant="outline" className="rounded-2xl">{label("report.clearHandwriting", "Vymazat")}</Button>
-              <Button onClick={saveHandwritingAsPhoto} className="rounded-2xl">{label("report.saveHandwriting", "Uložit rukopis")}</Button>
-              <Button onClick={() => setHandwritingOpen(false)} variant="outline" className="rounded-2xl">{t("common.close")}</Button>
-            </div>
-          </div>
-          <canvas
-            ref={canvasRef}
-            tabIndex={-1}
-            aria-label={label("report.openHandwriting", "Rukopisné poznámky")}
-            onPointerDown={beginHandwriting}
-            onPointerMove={drawHandwriting}
-            onPointerUp={endHandwriting}
-            onPointerCancel={endHandwriting}
-            onPointerLeave={endHandwriting}
-            onContextMenu={(event) => event.preventDefault()}
-            onSelect={(event) => event.preventDefault()}
-            className="min-h-0 flex-1 touch-none rounded-2xl border bg-white"
-            style={{
-              touchAction: "none",
-              WebkitUserSelect: "none",
-              userSelect: "none",
-              WebkitTouchCallout: "none",
-              WebkitTapHighlightColor: "transparent",
-            }}
-          />
-        </div>
-      )}
-    </div>
+    </>
   );
 }
 
