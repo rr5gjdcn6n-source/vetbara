@@ -1589,21 +1589,23 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
   }
 
   function beginHandwriting(event) {
-    if (!isStylusEvent(event)) return;
     event.preventDefault();
+    event.stopPropagation();
+    if (!isStylusEvent(event)) return;
     const prepared = prepareCanvasContext();
     if (!prepared) return;
 
     const point = canvasPoint(event, prepared.rect);
     drawingRef.current = true;
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    prepared.canvas.setPointerCapture?.(event.pointerId);
     prepared.ctx.beginPath();
     prepared.ctx.moveTo(point.x, point.y);
   }
 
   function drawHandwriting(event) {
-    if (!drawingRef.current || !isStylusEvent(event)) return;
     event.preventDefault();
+    event.stopPropagation();
+    if (!drawingRef.current || !isStylusEvent(event)) return;
     const prepared = prepareCanvasContext();
     if (!prepared) return;
 
@@ -1613,9 +1615,11 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
   }
 
   function endHandwriting(event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
     if (event?.pointerType && !isStylusEvent(event)) return;
     drawingRef.current = false;
-    event?.currentTarget?.releasePointerCapture?.(event.pointerId);
+    canvasRef.current?.releasePointerCapture?.(event.pointerId);
   }
 
   function clearHandwriting() {
@@ -1816,7 +1820,24 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
       )}
 
       {handwritingOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-white p-4">
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-white p-4"
+          onContextMenu={(event) => event.preventDefault()}
+          onSelect={(event) => event.preventDefault()}
+          onSelectCapture={(event) => event.preventDefault()}
+          onPointerDownCapture={(event) => {
+            if (event.target?.tagName === "CANVAS") {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }}
+          style={{
+            WebkitUserSelect: "none",
+            userSelect: "none",
+            WebkitTouchCallout: "none",
+            touchAction: "none",
+          }}
+        >
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-semibold">{label("report.openHandwriting", "Rukopisné poznámky")}</h3>
@@ -1832,17 +1853,22 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
           </div>
           <canvas
             ref={canvasRef}
+            tabIndex={-1}
+            aria-label={label("report.openHandwriting", "Rukopisné poznámky")}
             onPointerDown={beginHandwriting}
             onPointerMove={drawHandwriting}
             onPointerUp={endHandwriting}
             onPointerCancel={endHandwriting}
             onPointerLeave={endHandwriting}
+            onContextMenu={(event) => event.preventDefault()}
+            onSelect={(event) => event.preventDefault()}
             className="min-h-0 flex-1 touch-none rounded-2xl border bg-white"
             style={{
               touchAction: "none",
               WebkitUserSelect: "none",
               userSelect: "none",
               WebkitTouchCallout: "none",
+              WebkitTapHighlightColor: "transparent",
             }}
           />
         </div>
