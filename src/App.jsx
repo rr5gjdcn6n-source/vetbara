@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { bootstrapSession, resolveQrToken, syncBatch, fetchCandidateEvaluation, exportCandidateEvaluation, exportCentreAuditPackage, downloadBase64File, loadCentreSetup } from "./lib/api";
 import { CandidateQuickHelp, ExaminerQuickHelp, PilotReleaseNotesPanel, PilotSmokeTestChecklist } from "./components/PilotInfoPanels";
@@ -419,6 +419,20 @@ function RealQr({ value, size = 112 }) {
   );
 }
 function parseQrPayload(payload) { try { const url = new URL(payload); return { role: url.searchParams.get("role"), id: url.searchParams.get("id"), token: url.searchParams.get("token"), name: url.searchParams.get("name"), level: url.searchParams.get("level"), birthDate: url.searchParams.get("birthDate"), documentId: url.searchParams.get("documentId"), email: url.searchParams.get("email") }; } catch { const [role, id, token] = String(payload).split("|"); return { role, id, token }; } }
+function parseOfflineCandidatePackage(payload) {
+  try {
+    const data = JSON.parse(String(payload));
+    if (
+      (data?.kind === "vetbara.offlineCandidatePackage.v1" || data?.kind === "vetbara.offlineTestResponses.v1") &&
+      data.candidateId
+    ) return data;
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 function QrScannerPanel({ title, onScan, onClose, t }) { const id = useMemo(() => `qr-reader-${Math.random().toString(36).slice(2)}`, []); useEffect(() => { const scanner = new Html5QrcodeScanner(id, { fps: 10, qrbox: { width: 250, height: 250 } }, false); scanner.render((text) => { onScan(text); scanner.clear().catch(() => {}); }, () => {}); return () => { scanner.clear().catch(() => {}); }; }, [id, onScan]); return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"><div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl"><div className="mb-4 flex items-center justify-between gap-3"><div><h3 className="text-lg font-semibold">{title}</h3><p className="text-sm text-slate-600">{t("qrScanner.helper")}</p></div><Button onClick={onClose} variant="outline" className="rounded-2xl">{t("common.close")}</Button></div><div id={id} className="overflow-hidden rounded-2xl border" /></div></div>; }
 
 export default function VetBaraPrototype() {
@@ -638,7 +652,82 @@ export default function VetBaraPrototype() {
     addAudit("QR role blocked", access.role ?? "Unknown role", "Resolved role or subject does not match this portal package");
   }
 
-  async function handleQrScan(text) { const p = { ...parseQrPayload(text), raw: text }; const access = await resolveAccessWithFallback(p, "QR accepted"); if (access) applyResolvedAccess(access, "QR accepted"); setScannerMode(null); }
+  async function handleQrScan(text) {
+    const offlinePackage = parseOfflineCandidatePackage(text);
+
+    if (offlinePackage) {
+      importOfflineCandidatePackage(offlinePackage);
+      setScannerMode(null);
+      return;
+    }
+
+    const p = { ...parseQrPayload(text), raw: text };
+    const access = await resolveAccessWithFallback(p, "QR accepted");
+    if (access) applyResolvedAccess(access, "QR accepted");
+    setScannerMode(null);
+  }
+
+  function importOfflineCandidatePackage(offlinePackage) {
+    if (!offlinePackage?.candidateId) return false;
+
+    const candidateId = offlinePackage.candidateId;
+    const responses = offlinePackage.responses ?? {};
+    const answerCount = Object.keys(responses).length;
+    const reportDraft = offlinePackage.reportDraft ?? null;
+    const reportPhotoCount = reportDraft ? countReportPhotos(reportDraft) : 0;
+
+    if (Object.keys(responses).length) {
+      setTestResponses((prev) => ({
+        ...prev,
+        [candidateId]: {
+          ...(prev[candidateId] ?? {}),
+          ...responses,
+        },
+      }));
+    }
+
+    if (reportDraft) {
+      setReportDrafts((prev) => ({
+        ...prev,
+        [candidateId]: reportDraft,
+      }));
+    }
+
+    setSelectedCandidateId(candidateId);
+    setActiveExaminerPage(reportDraft ? "reportReview" : "writtenReview");
+    setStatus(`Offline candidate package imported: ${answerCount} answer(s), ${reportPhotoCount} report photo(s)`);
+    addAudit("Offline candidate package imported", offlinePackage.candidateName || candidateId, `${answerCount} answer(s), ${reportPhotoCount} report photo(s) / ${offlinePackage.variantCode || "-"}`);
+    window.setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 0);
+    return true;
+  }
+
+  function importOfflineCandidatePackageFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(String(reader.result ?? ""));
+        if (!parseOfflineCandidatePackage(JSON.stringify(data))) throw new Error("Invalid offline package");
+        importOfflineCandidatePackage(data);
+        event.target.value = "";
+      } catch (error) {
+        console.error("Offline package import failed", error);
+        setStatus("Offline package import failed");
+        event.target.value = "";
+      }
+    };
+
+    reader.onerror = () => {
+      setStatus("Offline package file could not be read");
+      event.target.value = "";
+    };
+
+    reader.readAsText(file);
+  }
+
   async function sendSyncEvent(event) {
     if (!activeSessionToken) return;
     const syncId = event.clientEventId;
@@ -1088,7 +1177,13 @@ export default function VetBaraPrototype() {
   function openCandidateSection(key) {
     if (!loggedCandidate || !candidateConfirmed[loggedCandidate.id]) return;
     const current = candidateStatus[loggedCandidate.id]?.[key];
-    if (current === "closed" && !window.confirm("This section is already closed. Reopening requires examiner approval. Has an examiner approved this reopening?")) return;
+    if (current === "closed") {
+      const password = window.prompt("Pro znovuotevření uzavřené části zadejte schvalovací heslo:");
+      if (password !== "Vetarbo") {
+        window.alert("Neplatné heslo. Znovuotevření nebylo povoleno.");
+        return;
+      }
+    }
     const openedAt = nowStamp();
     const openedAtIso = new Date().toISOString();
     setCandidateStatus((prev) => ({ ...prev, [loggedCandidate.id]: { ...(prev[loggedCandidate.id] ?? createSectionStatus(loggedCandidate.level)), [key]: "open" } }));
@@ -1254,6 +1349,18 @@ export default function VetBaraPrototype() {
     sendSyncEvent({ clientEventId: localEventId(`outdoor-assessment-opened-${candidateId}-${loggedExaminer.id}`), type: "outdoor_assessment.opened", entityType: "outdoor_assessment", entityId: `${candidateId}:outdoor`, candidateId, payload: { candidateId, examinerId: loggedExaminer.id, mode, role: mode, sectionKey: "outdoor", openedAt: openedAtIso, openedAtLabel: openedAt }, createdAt: openedAtIso });
     hydrateOutdoorProgress(activeSessionToken, loggedExaminer.id, candidateId);
   }
+  function openExaminerWrittenReview(candidateId) {
+    setSelectedCandidateId(candidateId);
+    setActiveExaminerPage("writtenReview");
+    window.setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 0);
+  }
+
+  function openExaminerReportReview(candidateId) {
+    setSelectedCandidateId(candidateId);
+    setActiveExaminerPage("reportReview");
+    window.setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 0);
+  }
+
   function updateOutdoor(itemId, value) {
     if (!loggedExaminer || selectedMode === "unassigned") return;
     const item = Object.values(OUTDOOR_ITEMS[selectedCandidate.level]).flat().find((x) => x.id === itemId);
@@ -1357,12 +1464,12 @@ export default function VetBaraPrototype() {
   return <main className="min-h-screen bg-slate-50 p-4 text-slate-900 md:p-8"><div className="mx-auto max-w-7xl">
     <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div className="flex items-start gap-4"><img src="/brand/vetcert-logo.jpg" alt="VETcert Certified Veteran Tree Specialist" className="h-14 w-14 shrink-0 rounded-full border bg-white object-contain p-1 shadow-sm md:h-16 md:w-16" /><div><div className="mb-2 flex flex-wrap items-center gap-2"><div className="rounded-2xl bg-slate-950 px-3 py-1 text-sm font-semibold text-white">{t("app.title")}</div><StatusPill tone="warn">{t("app.mvpPrototype")}</StatusPill><StatusPill><CloudOff className="mr-1 h-3.5 w-3.5" /> {t("app.offlineFirst")}</StatusPill></div><h1 className="text-3xl font-bold tracking-tight md:text-5xl">{t("app.heroTitle")}</h1><p className="mt-2 max-w-3xl text-slate-600">{t("app.subtitle")}</p></div></div><div className="flex flex-wrap items-center gap-2"><label className="text-xs font-medium text-slate-500">{t("language.label")}<select value={uiLanguage} onChange={(e) => setUiLanguage(e.target.value)} className="ml-2 rounded-xl border bg-white p-2 text-sm text-slate-950">{UI_LANGUAGES.map((lang) => <option key={lang.code} value={lang.code}>{lang.draft ? `${lang.label} - draft` : lang.label}</option>)}</select></label>{lockedPortalRole ? <StatusPill tone="good">{tf("app.dedicatedPortal", { role: roleLabel(lockedPortalRole) })}</StatusPill> : ROLES.map((r) => <Button key={r} onClick={() => setRole(r)} variant={role === r ? "default" : "outline"} className="rounded-2xl">{roleLabel(r)}</Button>)}</div></header>
     {draftPreviewActive && <div role="status" className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-950 shadow-sm">{t("language.draftPreviewWarning")}</div>}
-    <Card className="mb-4 rounded-2xl shadow-sm"><CardContent className="p-5"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><div className="text-sm font-medium text-slate-500">{t("workspace.current")}</div><div className="text-2xl font-bold tracking-tight">{role}</div></div><div className="flex flex-wrap gap-2"><StatusPill>{status}</StatusPill><StatusPill>{summary.total} {t("workspace.candidates")}</StatusPill><StatusPill>{summary.practicing} Practicing</StatusPill><StatusPill>{summary.consulting} Consulting</StatusPill></div></div></CardContent></Card>
+    {!["Candidate", "Examiner"].includes(role) && <Card className="mb-4 rounded-2xl shadow-sm"><CardContent className="p-5"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><div className="text-sm font-medium text-slate-500">{t("workspace.current")}</div><div className="text-2xl font-bold tracking-tight">{role}</div></div><div className="flex flex-wrap gap-2"><StatusPill>{status}</StatusPill><StatusPill>{summary.total} {t("workspace.candidates")}</StatusPill><StatusPill>{summary.practicing} Practicing</StatusPill><StatusPill>{summary.consulting} Consulting</StatusPill></div></div></CardContent></Card>}
     <div className="grid gap-4 lg:grid-cols-3">
       {role === "Admin" && <AdminView centre={centre} setCentre={setCentre} examDate={examDate} setExamDate={setExamDate} place={place} setPlace={setPlace} language={language} setLanguage={setLanguage} availableVariants={availableVariants} variants={variants} testImportStatus={testImportStatus} testImportError={testImportError} testImportSummary={testImportSummary} importTestPackage={importTestPackage} setStatus={setStatus} addAudit={addAudit} setScannerMode={setScannerMode} centreQr={payload("Centre", centre, CENTRE_ACCESS_TOKEN)} t={t} />}
       {role === "Centre" && <CentreView centreUnlocked={centreUnlocked} centreCode={centreCode} setCentreCode={setCentreCode} unlockCentre={unlockCentre} enabledLevels={enabledLevels} toggleLevel={toggleLevel} language={language} availableVariants={availableVariants} variants={variants} setVariants={setVariants} importTestPackage={importTestPackage} testImportStatus={testImportStatus} testImportError={testImportError} testImportSummary={testImportSummary} candidates={candidates} selectedCandidateId={selectedCandidateId} setSelectedCandidateId={setSelectedCandidateId} addCandidate={addCandidate} updateCandidate={updateCandidate} assignments={assignments} setAssignments={setAssignments} examiners={examiners} candidateQrFor={(id) => payload("Candidate", id)} examinerQrFor={(id) => payload("Examiner", id)} centreSetupLoading={centreSetupLoading} centreSetupSaving={centreSetupSaving} centreSetupError={centreSetupError} centreSetupStatus={centreSetupStatus} centreAuditExportLoading={centreAuditExportLoading} centreAuditExportError={centreAuditExportError} centreQrAccess={centreQrAccess} centreValidationIssues={centreValidationIssues} centreSetupDirty={centreSetupDirty} setCentreSetupDirty={setCentreSetupDirty} dataMode={centreDataMode} candidateConfirmed={candidateConfirmed} candidateStatus={candidateStatus} candidateTimes={candidateTimes} testResponses={testResponses} reportDrafts={reportDrafts} outdoor={outdoor} handleLoadCentreSetup={handleLoadCentreSetup} handleSaveCentreSetup={handleSaveCentreSetup} handleDownloadCentreAuditPackage={handleDownloadCentreAuditPackage} updateExaminer={updateExaminer} addExaminer={addExaminer} t={t} />}
       {role === "Candidate" && <CandidateView candidates={candidates} loggedCandidate={loggedCandidate} confirmed={loggedCandidate ? candidateConfirmed[loggedCandidate.id] : false} loginCandidate={loginCandidate} logoutCandidate={() => setLoggedCandidateId(null)} confirmCandidate={confirmCandidate} sections={loggedCandidate ? CANDIDATE_SECTIONS[loggedCandidate.level] : []} sectionStatus={loggedCandidate ? candidateStatus[loggedCandidate.id] ?? createSectionStatus(loggedCandidate.level) : {}} sectionTimes={loggedCandidate ? candidateTimes[loggedCandidate.id] ?? {} : {}} sectionTone={sectionTone} openSection={openCandidateSection} activeSection={activeCandidateSection} setActiveSection={setActiveCandidateSection} testResponses={testResponses} updateTest={updateTest} submitTest={submitTest} reportDrafts={reportDrafts} activeReportTree={activeReportTree} setActiveReportTree={setActiveReportTree} updateReport={updateReport} addReportPhoto={addReportPhoto} updateReportPhoto={updateReportPhoto} submitReport={submitReport} variants={variants} testBank={testBank} qrFor={(id) => payload("Candidate", id)} setScannerMode={setScannerMode} t={t} />}
-      {role === "Examiner" && <ExaminerView examiners={EXAMINERS} loggedExaminer={loggedExaminer} confirmed={loggedExaminer ? examinerConfirmed[loggedExaminer.id] : false} loginExaminer={loginExaminer} logoutExaminer={() => setLoggedExaminerId(null)} confirmExaminer={confirmExaminer} assignedCandidates={assignedCandidates} assignments={assignments} setPrimary={setPrimary} activePage={activeExaminerPage} setActivePage={setActiveExaminerPage} openOutdoor={openOutdoor} selectedCandidate={selectedCandidate} selectedMode={selectedMode} activeOutdoorSection={activeOutdoorSection} setActiveOutdoorSection={setActiveOutdoorSection} outdoor={outdoor} outdoorNotes={outdoorNotes} updateOutdoor={updateOutdoor} updateOutdoorNote={updateOutdoorNote} outdoorTotal={outdoorTotal} outdoorMax={outdoorMax} submitOutdoor={submitOutdoor} archivePlan={archivePlan} practicingArchive={practicingArchive} scoring={scoring} updateScore={updateScore} generateEvaluation={generateEvaluation} lastEvaluation={lastEvaluation} loadEvaluationPreview={loadEvaluationPreview} evaluationPreview={evaluationPreview} evaluationLoading={evaluationLoading} evaluationError={evaluationError} downloadDraftExport={downloadDraftExport} exportLoading={exportLoading} exportError={exportError} variants={variants} testBank={testBank} testResponses={testResponses} reportDrafts={reportDrafts} qrFor={(id) => payload("Examiner", id)} setScannerMode={setScannerMode} examinerTimes={loggedExaminer ? examinerTimes[loggedExaminer.id] ?? {} : {}} t={t} />}
+      {role === "Examiner" && <ExaminerView examiners={EXAMINERS} loggedExaminer={loggedExaminer} confirmed={loggedExaminer ? examinerConfirmed[loggedExaminer.id] : false} loginExaminer={loginExaminer} logoutExaminer={() => setLoggedExaminerId(null)} confirmExaminer={confirmExaminer} assignedCandidates={assignedCandidates} assignments={assignments} setPrimary={setPrimary} activePage={activeExaminerPage} setActivePage={setActiveExaminerPage} openOutdoor={openOutdoor} openWrittenReview={openExaminerWrittenReview} openReportReview={openExaminerReportReview} selectedCandidate={selectedCandidate} selectedMode={selectedMode} activeOutdoorSection={activeOutdoorSection} setActiveOutdoorSection={setActiveOutdoorSection} outdoor={outdoor} outdoorNotes={outdoorNotes} updateOutdoor={updateOutdoor} updateOutdoorNote={updateOutdoorNote} outdoorTotal={outdoorTotal} outdoorMax={outdoorMax} submitOutdoor={submitOutdoor} archivePlan={archivePlan} practicingArchive={practicingArchive} scoring={scoring} updateScore={updateScore} generateEvaluation={generateEvaluation} lastEvaluation={lastEvaluation} loadEvaluationPreview={loadEvaluationPreview} evaluationPreview={evaluationPreview} evaluationLoading={evaluationLoading} evaluationError={evaluationError} downloadDraftExport={downloadDraftExport} exportLoading={exportLoading} exportError={exportError} variants={variants} testBank={testBank} testResponses={testResponses} reportDrafts={reportDrafts} qrFor={(id) => payload("Examiner", id)} setScannerMode={setScannerMode} importOfflineCandidatePackageFile={importOfflineCandidatePackageFile} examinerTimes={loggedExaminer ? examinerTimes[loggedExaminer.id] ?? {} : {}} t={t} />}
       {(role === "Admin" || role === "Centre") && <AuditSyncView sync={sync} setSync={setSync} audit={audit} CloudOff={CloudOff} SectionTitle={SectionTitle} StatusPill={StatusPill} Button={Button} Card={Card} CardContent={CardContent} t={t} />}
     </div>
     {scannerMode && <QrScannerPanel title={tf("qrScanner.scan", { role: roleLabel(scannerMode) })} onScan={handleQrScan} onClose={() => setScannerMode(null)} t={t} />}
@@ -1440,10 +1547,82 @@ function PilotWorkflowDashboard({ candidates, assignments, examiners, centreVali
 
 function CentreView({ centreUnlocked, centreCode, setCentreCode, unlockCentre, enabledLevels, toggleLevel, language, availableVariants, variants, setVariants, importTestPackage, testImportStatus, testImportError, testImportSummary, candidates, selectedCandidateId, setSelectedCandidateId, addCandidate, updateCandidate, assignments, setAssignments, examiners, candidateQrFor, examinerQrFor, centreSetupLoading, centreSetupSaving, centreSetupError, centreSetupStatus, centreAuditExportLoading, centreAuditExportError, centreQrAccess, centreValidationIssues, centreSetupDirty, setCentreSetupDirty, dataMode, candidateConfirmed, candidateStatus, candidateTimes, testResponses, reportDrafts, outdoor, handleLoadCentreSetup, handleSaveCentreSetup, handleDownloadCentreAuditPackage, updateExaminer, addExaminer, t }) {  const selectedCandidate = candidates.find((candidate) => candidate.id === selectedCandidateId) ?? candidates[0]; const [copiedQr, setCopiedQr] = useState(""); const candidateQrUrl = (id) => centreQrAccess?.candidates?.find((item) => item.subjectId === id || item.subject_id === id)?.url; const examinerQrUrl = (id) => centreQrAccess?.examiners?.find((item) => item.subjectId === id || item.subject_id === id)?.url; async function copyQrLink(label, value) { try { if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(value); setCopiedQr(t("centre.copy.copied").replace("{label}", label)); return; } setCopiedQr(t("centre.copy.unavailable").replace("{label}", label)); } catch { setCopiedQr(t("centre.copy.unavailable").replace("{label}", label)); } } return <Card className="rounded-2xl shadow-sm lg:col-span-3"><CardContent className="p-5">{!centreUnlocked && <div className="mb-4 rounded-2xl border bg-white p-4"><SectionTitle icon={QrCodeIcon} title={t("centre.access.title")} subtitle={t("centre.access.subtitle")} /><div className="flex flex-col gap-3 md:flex-row"><input value={centreCode} onChange={(e) => setCentreCode(e.target.value)} placeholder={t("centre.access.placeholder")} className="w-full rounded-xl border bg-white p-2 font-mono text-sm" /><Button onClick={unlockCentre} className="rounded-2xl">{t("centre.access.open")}</Button></div><div className="mt-2 text-xs text-slate-500">{t("centre.access.prototypeToken")}: {CENTRE_ACCESS_TOKEN}</div></div>}<div className={centreUnlocked ? "" : "pointer-events-none opacity-40"}><SectionTitle icon={Users} title={t("centre.config.title")} subtitle={t("centre.config.subtitle")} /><div className="mb-4 rounded-2xl border bg-white p-4"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h3 className="font-semibold">{t("centre.setupPersistence.title")}</h3><p className="mt-1 text-sm text-slate-600">{t("centre.setupPersistence.helper")}</p></div><div className="flex flex-wrap gap-2"><Button onClick={handleLoadCentreSetup} disabled={centreSetupLoading || centreSetupSaving || centreAuditExportLoading} variant="outline" className="rounded-2xl">{centreSetupLoading ? t("centre.setupPersistence.loading") : t("centre.setupPersistence.load")}</Button><Button onClick={handleSaveCentreSetup} disabled={centreSetupLoading || centreSetupSaving || centreAuditExportLoading} className="rounded-2xl">{centreSetupSaving ? t("centre.setupPersistence.saving") : t("centre.setupPersistence.save")}</Button><Button onClick={handleDownloadCentreAuditPackage} disabled={centreSetupLoading || centreSetupSaving || centreAuditExportLoading} variant="outline" className="rounded-2xl">{centreAuditExportLoading ? t("centre.setupPersistence.exporting") : t("centre.setupPersistence.auditExport")}</Button></div></div><div className="mt-3 flex flex-wrap items-center gap-2"><StatusPill tone={centreSetupDirty ? "warn" : "good"}>{centreSetupDirty ? t("centre.setupPersistence.unsaved") : t("centre.setupPersistence.saved")}</StatusPill><span className="text-xs text-slate-500">{t("centre.setupPersistence.saveHelper")}</span></div>{centreSetupStatus && <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{centreSetupStatus}</div>}{centreSetupError && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">{centreSetupError}</div>}{centreAuditExportError && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">{centreAuditExportError}</div>}<CentreValidationSummary issues={centreValidationIssues} StatusPill={StatusPill} t={t} /></div><div className="mt-4 rounded-2xl border bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">{t("centre.dataMode.title")}</h3><p className="mt-1 text-sm text-slate-600">{dataMode === "backend" ? t("centre.dataMode.backendHelper") : t("centre.dataMode.demoHelper")}</p><p className="mt-1 text-xs text-slate-500">{t("centre.dataMode.saveAfterChanges")}</p></div><StatusPill tone={dataMode === "backend" ? "good" : "warn"}>{dataMode === "backend" ? t("centre.dataMode.backend") : t("centre.dataMode.demo")}</StatusPill></div></div><PilotReadinessGuardrails centreValidationIssues={centreValidationIssues} centreSetupDirty={centreSetupDirty} testImportSummary={testImportSummary} dataMode={dataMode} StatusPill={StatusPill} t={t} /><PilotRunSummary centreValidationIssues={centreValidationIssues} centreSetupDirty={centreSetupDirty} testImportSummary={testImportSummary} dataMode={dataMode} StatusPill={StatusPill} t={t} /><CentreNetworkReadinessChecklist StatusPill={StatusPill} t={t} /><PilotWorkflowDashboard candidates={candidates} assignments={assignments} examiners={examiners} centreValidationIssues={centreValidationIssues} testImportSummary={testImportSummary} candidateConfirmed={candidateConfirmed} candidateStatus={candidateStatus} candidateTimes={candidateTimes} testResponses={testResponses} reportDrafts={reportDrafts} outdoor={outdoor} centreSetupStatus={centreSetupStatus} dataMode={dataMode} t={t} /><PilotSmokeTestChecklist StatusPill={StatusPill} t={t} /><PilotReleaseNotesPanel StatusPill={StatusPill} t={t} /><div className="grid gap-4 lg:grid-cols-3"><div className="rounded-2xl border bg-white p-4"><h3 className="mb-3 font-semibold">{t("centre.levels.title")}</h3>{EXAM_LEVELS.map((level) => <label key={level} className="mb-3 flex items-center gap-3 rounded-xl border p-3 text-sm"><input type="checkbox" checked={enabledLevels.includes(level)} onChange={() => toggleLevel(level)} /><span>{level}</span></label>)}</div><div className="rounded-2xl border bg-white p-4 lg:col-span-2"><div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between"><div><h3 className="font-semibold">{t("centre.variants.title")}</h3><p className="mt-1 text-sm text-slate-600">{t("centre.variants.helper")}</p></div><label className="rounded-2xl border bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50">{t("centre.variants.import")}<input type="file" accept=".csv,.json,application/json,text/csv" onChange={importTestPackage} className="hidden" /></label></div><div className="mt-3 grid gap-3 md:grid-cols-2">{EXAM_LEVELS.map((level) => { const vars = availableVariants.filter((v) => v.level === level && v.language === language); return <label key={level} className="text-sm font-medium">{level}<select value={variants[level] ?? ""} onChange={(e) => { setCentreSetupDirty(true); setVariants((prev) => ({ ...prev, [level]: e.target.value })); }} className="mt-1 w-full rounded-xl border bg-white p-2">{vars.length ? vars.map((v) => <option key={v.code} value={v.code}>{v.code}</option>) : <option value="">{t("centre.variants.noImported")}</option>}</select></label>; })}</div><div className="mt-3 rounded-xl bg-slate-100 p-3 text-xs text-slate-600">{t("centre.variants.csvHelper")}</div>{testImportStatus && <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{testImportStatus}</div>}{testImportError && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">{testImportError}</div>}{testImportSummary && <div className="mt-2 text-xs text-slate-500">{t("centre.variants.importedSummary").replace("{variants}", testImportSummary.variants).replace("{questions}", testImportSummary.questions)}</div>}</div></div><div className="mt-4 rounded-2xl border bg-white p-4"><div className="mb-3 flex items-center justify-between"><h3 className="font-semibold">{t("centre.candidates.title")}</h3><Button onClick={addCandidate} variant="outline" className="rounded-2xl">{t("centre.candidates.add")}</Button></div><div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">{candidates.map((c) => <button key={c.id} onClick={() => setSelectedCandidateId(c.id)} className={`rounded-2xl border p-3 text-left ${selectedCandidateId === c.id ? "border-slate-950 bg-slate-50" : "bg-white"}`}><div className="text-xs text-slate-500">{c.id}</div><div className="font-medium">{c.name}</div><StatusPill>{c.level}</StatusPill></button>)}</div></div>{selectedCandidate && <div className="mt-4 rounded-2xl border bg-white p-4"><h3 className="mb-3 font-semibold">{t("centre.candidateDetails.title")}</h3><div className="grid gap-3 md:grid-cols-3"><label className="text-xs font-medium text-slate-500">{t("centre.candidateDetails.id")}<input value={selectedCandidate.id ?? ""} readOnly className="mt-1 w-full rounded-xl border bg-slate-100 p-2 text-sm text-slate-600" /></label><label className="text-xs font-medium text-slate-500">{t("centre.candidateDetails.name")}<input value={selectedCandidate.name ?? ""} onChange={(e) => updateCandidate(selectedCandidate.id, { name: e.target.value })} className="mt-1 w-full rounded-xl border bg-white p-2 text-sm text-slate-950" /></label><label className="text-xs font-medium text-slate-500">{t("centre.candidateDetails.level")}<select value={selectedCandidate.level ?? "Practicing"} onChange={(e) => updateCandidate(selectedCandidate.id, { level: e.target.value })} className="mt-1 w-full rounded-xl border bg-white p-2 text-sm text-slate-950"><option value="Practicing">Practicing</option><option value="Consulting">Consulting</option></select></label><label className="text-xs font-medium text-slate-500">{t("centre.candidateDetails.birthDate")}<input value={selectedCandidate.birthDate ?? ""} onChange={(e) => updateCandidate(selectedCandidate.id, { birthDate: e.target.value })} className="mt-1 w-full rounded-xl border bg-white p-2 text-sm text-slate-950" /></label><label className="text-xs font-medium text-slate-500">{t("centre.candidateDetails.documentId")}<input value={selectedCandidate.documentId ?? ""} onChange={(e) => updateCandidate(selectedCandidate.id, { documentId: e.target.value })} className="mt-1 w-full rounded-xl border bg-white p-2 text-sm text-slate-950" /></label><label className="text-xs font-medium text-slate-500">{t("centre.candidateDetails.email")}<input value={selectedCandidate.email ?? ""} onChange={(e) => updateCandidate(selectedCandidate.id, { email: e.target.value })} className="mt-1 w-full rounded-xl border bg-white p-2 text-sm text-slate-950" /></label></div></div>}<div className="mt-4 rounded-2xl border bg-white p-4"><div className="mb-3 flex items-center justify-between gap-3"><h3 className="font-semibold">{t("centre.examiners.title")}</h3><Button onClick={addExaminer} variant="outline" className="rounded-2xl">{t("centre.examiners.add")}</Button></div><div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">{examiners.map((ex) => <div key={ex.id} className="rounded-2xl border bg-white p-3 text-sm"><label className="text-xs font-medium text-slate-500">{t("centre.examinerDetails.id")}<input value={ex.id ?? ""} onChange={(e) => updateExaminer(ex.id, { id: e.target.value })} className="mt-1 w-full rounded-xl border bg-white p-2 text-sm text-slate-950" /></label><label className="mt-2 block text-xs font-medium text-slate-500">{t("centre.examinerDetails.name")}<input value={ex.name ?? ""} onChange={(e) => updateExaminer(ex.id, { name: e.target.value })} className="mt-1 w-full rounded-xl border bg-white p-2 text-sm text-slate-950" /></label><label className="mt-2 block text-xs font-medium text-slate-500">{t("centre.examinerDetails.registrationId")}<input value={ex.registrationId ?? ""} onChange={(e) => updateExaminer(ex.id, { registrationId: e.target.value })} className="mt-1 w-full rounded-xl border bg-white p-2 text-sm text-slate-950" /></label><label className="mt-2 block text-xs font-medium text-slate-500">{t("centre.examinerDetails.email")}<input value={ex.email ?? ""} onChange={(e) => updateExaminer(ex.id, { email: e.target.value })} className="mt-1 w-full rounded-xl border bg-white p-2 text-sm text-slate-950" /></label></div>)}</div></div><div className="mt-4 rounded-2xl border bg-white p-4"><h3 className="mb-3 font-semibold">{t("centre.assignments.title")}</h3><div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><thead><tr className="border-b text-left text-slate-500"><th className="py-2 pr-3">{t("centre.workflow.candidate")}</th><th className="py-2 pr-3">{t("centre.workflow.level")}</th><th className="py-2 pr-3">{t("centre.workflow.primaryExaminer")}</th><th className="py-2 pr-3">{t("centre.workflow.secondaryExaminer")}</th></tr></thead><tbody>{candidates.map((c) => <tr key={c.id} className="border-b"><td className="py-2 pr-3 font-medium">{c.name}</td><td className="py-2 pr-3">{c.level}</td>{["primary", "secondary"].map((slot) => <td key={slot} className="py-2 pr-3"><select value={assignments[c.id]?.[slot] ?? ""} onChange={(e) => { setCentreSetupDirty(true); setAssignments((prev) => ({ ...prev, [c.id]: { ...(prev[c.id] ?? {}), [slot]: e.target.value } })); }} className="w-full rounded-xl border bg-white p-2">{examiners.map((ex) => <option key={ex.id} value={ex.id}>{ex.name}</option>)}</select></td>)}</tr>)}</tbody></table></div></div><CentreQrAccessPack candidates={candidates} examiners={examiners} candidateQrUrl={candidateQrUrl} examinerQrUrl={examinerQrUrl} candidateQrFor={candidateQrFor} examinerQrFor={examinerQrFor} copiedQr={copiedQr} copyQrLink={copyQrLink} QrCodeIcon={QrCodeIcon} SectionTitle={SectionTitle} StatusPill={StatusPill} Button={Button} RealQr={RealQr} t={t} /></div></CardContent></Card>;
 }
+function createOfflineCandidatePackage({ candidate, variantCode, responses, reportDraft, includePhotoData = false }) {
+  const filteredReportDraft = candidate.level === "Consulting"
+    ? REPORT_TREES.reduce((acc, treeName) => {
+        const sourceTree = reportDraft?.[treeName] ?? createReportDraft()[treeName];
+        return {
+          ...acc,
+          [treeName]: {
+            finalSections: sourceTree.finalSections ?? {},
+            photos: (sourceTree.photos ?? [])
+              .filter((photo) => photo.useInReport ?? true)
+              .map((photo) => ({
+                id: photo.id,
+                name: photo.name,
+                type: photo.type,
+                size: photo.size,
+                ...(includePhotoData ? { dataUrl: photo.dataUrl } : {}),
+                description: photo.description ?? "",
+                useInReport: true,
+                createdAt: photo.createdAt ?? photo.capturedAt ?? null,
+              })),
+          },
+        };
+      }, {})
+    : null;
+
+  return {
+    kind: "vetbara.offlineCandidatePackage.v1",
+    candidateId: candidate.id,
+    candidateName: candidate.name,
+    level: candidate.level,
+    variantCode,
+    responses: responses ?? {},
+    reportDraft: filteredReportDraft,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 function CandidateView({ candidates, loggedCandidate, confirmed, loginCandidate, logoutCandidate, confirmCandidate, sections, sectionStatus, sectionTimes, sectionTone, openSection, activeSection, setActiveSection, testResponses, updateTest, submitTest, reportDrafts, activeReportTree, setActiveReportTree, updateReport, addReportPhoto, updateReportPhoto, submitReport, variants, testBank, qrFor, setScannerMode, t }) {
   const selectedVariantCode = loggedCandidate ? variants[loggedCandidate.level] : "";
+  const candidateSectionClosed = (key) => sectionStatus?.[key] === "closed";
+  const canShowOfflinePackage = Boolean(
+    loggedCandidate &&
+    candidateSectionClosed("test") &&
+    (loggedCandidate.level !== "Consulting" || candidateSectionClosed("report"))
+  );
+  const offlinePackagePayload = canShowOfflinePackage
+    ? JSON.stringify(createOfflineCandidatePackage({
+        candidate: loggedCandidate,
+        variantCode: selectedVariantCode,
+        responses: testResponses[loggedCandidate.id] ?? {},
+        reportDraft: reportDrafts[loggedCandidate.id] ?? createReportDraft(),
+        includePhotoData: false,
+      }))
+    : "";
 
-  return <Card className="rounded-2xl shadow-sm lg:col-span-3"><CardContent className="p-5"><SectionTitle icon={QrCodeIcon} title={t("candidate.view.title")} subtitle={t("candidate.view.subtitle")} /><CandidateQuickHelp t={t} /><div className="grid gap-4 lg:grid-cols-3">{!loggedCandidate && <div className="rounded-2xl border bg-white p-4"><div className="flex items-center justify-between gap-3"><h3 className="font-semibold">{t("candidate.qrAccess.title")}</h3><Button onClick={() => setScannerMode("Candidate")} variant="outline" className="rounded-2xl">{t("common.scanQr")}</Button></div><p className="mt-3 text-sm text-slate-600">{t("candidate.qrAccess.helper")}</p></div>}<div className={`rounded-2xl border bg-white p-4 ${loggedCandidate ? "lg:col-span-3" : "lg:col-span-2"}`}>{!loggedCandidate ? <div className="rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">{t("candidate.empty")}</div> : <div className="grid gap-4"><div className="rounded-2xl bg-slate-100 p-4"><div className="flex flex-wrap gap-2"><StatusPill tone="good">{t("common.loggedIn")}</StatusPill><StatusPill>{loggedCandidate.level}</StatusPill><StatusPill>{selectedVariantCode}</StatusPill></div><div className="mt-2 font-semibold">{loggedCandidate.name}</div><Button onClick={logoutCandidate} variant="outline" className="mt-3 rounded-2xl">{t("common.logout")}</Button></div>{activeSection === "landing" && <CandidateLanding candidate={loggedCandidate} confirmed={confirmed} confirmCandidate={confirmCandidate} sections={sections} status={sectionStatus} times={sectionTimes} tone={sectionTone} openSection={openSection} t={t} />}{activeSection === "test" && <TestSection candidate={loggedCandidate} selectedVariantCode={selectedVariantCode} testBank={testBank} responses={testResponses[loggedCandidate.id] ?? {}} updateTest={updateTest} submitTest={submitTest} setActiveSection={setActiveSection} t={t} />}{activeSection === "report" && loggedCandidate.level === "Consulting" && <ReportSection candidate={loggedCandidate} reportDrafts={reportDrafts} activeReportTree={activeReportTree} setActiveReportTree={setActiveReportTree} updateReport={updateReport} addReportPhoto={addReportPhoto} updateReportPhoto={updateReportPhoto} submitReport={submitReport} t={t} />}</div>}</div></div></CardContent></Card>;
+  function downloadOfflineCandidatePackage() {
+    if (!loggedCandidate) return;
+
+    const fullPackage = createOfflineCandidatePackage({
+      candidate: loggedCandidate,
+      variantCode: selectedVariantCode,
+      responses: testResponses[loggedCandidate.id] ?? {},
+      reportDraft: reportDrafts[loggedCandidate.id] ?? createReportDraft(),
+      includePhotoData: true,
+    });
+
+    const blob = new Blob([JSON.stringify(fullPackage, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `vetbara-offline-package-${loggedCandidate.id}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return <Card className="rounded-2xl shadow-sm lg:col-span-3"><CardContent className="p-5"><SectionTitle icon={QrCodeIcon} title={t("candidate.view.title")} subtitle={t("candidate.view.subtitle")} /><CandidateQuickHelp t={t} /><div className="grid gap-4 lg:grid-cols-3">{!loggedCandidate && <div className="rounded-2xl border bg-white p-4"><div className="flex items-center justify-between gap-3"><h3 className="font-semibold">{t("candidate.qrAccess.title")}</h3><Button onClick={() => setScannerMode("Candidate")} variant="outline" className="rounded-2xl">{t("common.scanQr")}</Button></div><p className="mt-3 text-sm text-slate-600">{t("candidate.qrAccess.helper")}</p></div>}<div className={`rounded-2xl border bg-white p-4 ${loggedCandidate ? "lg:col-span-3" : "lg:col-span-2"}`}>{!loggedCandidate ? <div className="rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">{t("candidate.empty")}</div> : <div className="grid gap-4"><div className="rounded-2xl bg-slate-100 p-4"><div className="flex flex-wrap gap-2"><StatusPill tone="good">{t("common.loggedIn")}</StatusPill><StatusPill>{loggedCandidate.level}</StatusPill><StatusPill>{selectedVariantCode}</StatusPill></div><div className="mt-2 font-semibold">{loggedCandidate.name}</div><Button onClick={logoutCandidate} variant="outline" className="mt-3 rounded-2xl">{t("common.logout")}</Button></div>{activeSection === "landing" && <CandidateLanding candidate={loggedCandidate} confirmed={confirmed} confirmCandidate={confirmCandidate} sections={sections} status={sectionStatus} times={sectionTimes} tone={sectionTone} openSection={openSection} t={t} />}{activeSection === "test" && <TestSection candidate={loggedCandidate} selectedVariantCode={selectedVariantCode} testBank={testBank} responses={testResponses[loggedCandidate.id] ?? {}} updateTest={updateTest} submitTest={submitTest} setActiveSection={setActiveSection} t={t} />}{activeSection === "report" && loggedCandidate.level === "Consulting" && <ReportSection candidate={loggedCandidate} reportDrafts={reportDrafts} activeReportTree={activeReportTree} setActiveReportTree={setActiveReportTree} updateReport={updateReport} addReportPhoto={addReportPhoto} updateReportPhoto={updateReportPhoto} submitReport={submitReport} t={t} />}{canShowOfflinePackage && <div className="rounded-2xl border bg-slate-50 p-4"><div className="flex flex-col gap-4 md:flex-row md:items-center"><RealQr value={offlinePackagePayload} size={156} /><div><h4 className="font-semibold">Předat uzavřený test a report zkoušejícímu</h4><p className="mt-1 text-sm text-slate-600">Offline fallback: QR obsahuje pouze lehký manifest bez fotografií. Obsahuje uložené odpovědi testu a u Consulting také report bez terénních poznámek a metadata fotografií označených „Použít v reportu“.</p><p className="mt-2 text-sm text-slate-600">Pro předání fotografií stáhněte kompletní offline JSON balíček a předejte jej zkoušejícímu přes AirDrop, USB nebo lokální sdílení.</p><div className="mt-3 flex flex-wrap gap-2"><Button onClick={downloadOfflineCandidatePackage} variant="outline" className="rounded-2xl">Stáhnout offline balíček včetně fotografií</Button></div><p className="mt-2 text-xs text-slate-500">Examiner může naskenovat QR manifest nebo importovat kompletní JSON balíček v Examiner portálu.</p></div></div></div>}</div>}</div></div></CardContent></Card>;
 }
 function CandidateLanding({ candidate, confirmed, confirmCandidate, sections, status, times, tone, openSection, t }) {
   const hasWrittenTest = sections.some((section) => section.key === "test");
@@ -1461,14 +1640,63 @@ function CandidateLanding({ candidate, confirmed, confirmCandidate, sections, st
     return t("candidate.section.locked");
   }
 
-  return <div className="grid gap-4 lg:grid-cols-3"><div className="rounded-2xl border bg-white p-4"><h3 className="font-semibold">{t("candidate.identity.detailsTitle")}</h3>{[[t("candidate.identity.name"), candidate.name], [t("candidate.identity.birthDate"), candidate.birthDate], [t("candidate.identity.documentId"), candidate.documentId], [t("candidate.identity.examLevel"), candidate.level]].map(([k, v]) => <div key={k} className="mt-3 rounded-xl bg-slate-100 p-3 text-sm"><div className="text-xs text-slate-500">{k}</div><div className="font-medium">{v}</div></div>)}{!confirmed && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-950">{t("candidate.identity.warning")}</p>}<Button onClick={confirmCandidate} disabled={confirmed} className="mt-4 w-full rounded-2xl"><BadgeCheck className="mr-2 h-4 w-4" />{confirmed ? t("candidate.identity.confirmed") : t("candidate.identity.confirm")}</Button></div><div className="rounded-2xl border bg-white p-4 lg:col-span-2"><div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between"><div><h3 className="font-semibold">{t("candidate.landing.title")}</h3><p className="mt-1 text-sm text-slate-600">{t("candidate.landing.helper")}</p></div><div className="rounded-xl bg-slate-100 p-3 text-sm md:max-w-sm"><div className="font-semibold">{t("candidate.readiness.title")}</div><div className="mt-2 flex flex-wrap gap-2">{readinessItems.map(([label, ready]) => <StatusPill key={label} tone={ready ? "good" : "default"}>{label}</StatusPill>)}</div></div></div><div className="mt-4 grid gap-3 md:grid-cols-2">{sections.map((section) => <div key={section.key} className="rounded-2xl border bg-white p-4"><div className="flex items-start justify-between gap-3"><div><h4 className="font-semibold">{section.title}</h4><p className="mt-1 text-sm text-slate-600">{section.description}</p></div><StatusPill tone={tone(status[section.key])}>{status[section.key]}</StatusPill></div><p className="mt-2 text-xs text-slate-500">{sectionHelper(status[section.key])}</p><div className="mt-3 text-xs text-slate-500"><div>{t("common.opened")}: {times[section.key]?.openedAt || "-"}</div><div>{t("common.closed")}: {times[section.key]?.closedAt || "-"}</div></div><Button onClick={() => openSection(section.key)} disabled={!confirmed} className="mt-4 rounded-2xl">{status[section.key] === "closed" ? t("candidate.section.requestReopen") : t("candidate.sections.open")}</Button></div>)}</div></div></div>;
+  return <div className="grid gap-4 lg:grid-cols-3"><div className="rounded-2xl border bg-white p-4"><h3 className="font-semibold">{t("candidate.identity.detailsTitle")}</h3>{[[t("candidate.identity.name"), candidate.name], [t("candidate.identity.birthDate"), candidate.birthDate], [t("candidate.identity.documentId"), candidate.documentId], [t("candidate.identity.examLevel"), candidate.level]].map(([k, v]) => <div key={k} className="mt-3 rounded-xl bg-slate-100 p-3 text-sm"><div className="text-xs text-slate-500">{k}</div><div className="font-medium">{v}</div></div>)}{!confirmed && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-950">{t("candidate.identity.warning")}</p>}<Button onClick={confirmCandidate} disabled={confirmed} className="mt-4 w-full rounded-2xl"><BadgeCheck className="mr-2 h-4 w-4" />{confirmed ? t("candidate.identity.confirmed") : t("candidate.identity.confirm")}</Button></div><div className="rounded-2xl border bg-white p-4 lg:col-span-2"><div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between"><div><h3 className="font-semibold">{t("candidate.landing.title")}</h3><p className="mt-1 text-sm text-slate-600">{t("candidate.landing.helper")}</p></div></div><div className="mt-4 grid gap-3 md:grid-cols-2">{sections.map((section) => <div key={section.key} className="rounded-2xl border bg-white p-4"><div className="flex items-start justify-between gap-3"><div><h4 className="font-semibold">{section.title}</h4><p className="mt-1 text-sm text-slate-600">{section.description}</p></div><StatusPill tone={tone(status[section.key])}>{status[section.key]}</StatusPill></div><p className="mt-2 text-xs text-slate-500">{sectionHelper(status[section.key])}</p><div className="mt-3 text-xs text-slate-500"><div>{t("common.opened")}: {times[section.key]?.openedAt || "-"}</div><div>{t("common.closed")}: {times[section.key]?.closedAt || "-"}</div></div><Button onClick={() => openSection(section.key)} disabled={!confirmed} className="mt-4 rounded-2xl">{status[section.key] === "closed" ? t("candidate.section.requestReopen") : t("candidate.sections.open")}</Button></div>)}</div></div></div>;
 }
 
 function TestSection({ candidate, selectedVariantCode, testBank, responses, updateTest, submitTest, setActiveSection, t }) {
   const questions = testBank[selectedVariantCode] ?? [];
   const helper = t("test.variantAutosave").replace("{variant}", selectedVariantCode);
+  return (
+    <div className="rounded-2xl border bg-white p-4">
+      <div className="flex justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">{t("test.title")}</h3>
+          <p className="text-sm text-slate-600">{helper}</p>
+        </div>
+        <Button onClick={() => setActiveSection("landing")} variant="outline" className="rounded-2xl">
+          {t("common.back")}
+        </Button>
+      </div>
 
-  return <div className="rounded-2xl border bg-white p-4"><div className="flex justify-between gap-3"><div><h3 className="font-semibold">{t("test.title")}</h3><p className="text-sm text-slate-600">{helper}</p></div><Button onClick={() => setActiveSection("landing")} variant="outline" className="rounded-2xl">{t("common.back")}</Button></div>{questions.length === 0 ? <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-950"><div className="font-semibold">{t("test.noQuestions")}</div><p className="mt-1">{t("test.askCentre")}</p></div> : <div className="mt-3 space-y-4">{questions.map((q, i) => <div key={q.id} className="rounded-xl border p-3"><div className="text-xs text-slate-500">{t("test.question")} {i + 1} / {q.points} {t("common.points")}</div><div className="mt-1 font-medium">{q.text}</div>{q.type === "single_choice" ? <div className="mt-2 space-y-2">{q.options.map((option) => <label key={option} className="flex gap-2 rounded-xl bg-slate-50 p-2 text-sm"><input type="radio" checked={responses[q.id] === option} onChange={() => updateTest(q.id, option)} /><span>{option}</span></label>)}</div> : <textarea value={responses[q.id] ?? ""} onChange={(e) => updateTest(q.id, e.target.value)} className="mt-2 min-h-24 w-full rounded-xl border bg-white p-3 text-sm" placeholder={t("test.writeAnswer")} />}</div>)}</div>}<Button onClick={submitTest} disabled={questions.length === 0} className="mt-4 rounded-2xl"><Lock className="mr-2 h-4 w-4" /> {t("test.submit")}</Button><p className="mt-2 text-xs text-slate-500">{t("common.offlineRetry")}</p></div>;
+      {questions.length === 0 ? (
+        <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-950">
+          <div className="font-semibold">{t("test.noQuestions")}</div>
+          <p className="mt-1">{t("test.askCentre")}</p>
+        </div>
+      ) : (
+        <div className="mt-3 space-y-4">
+          {questions.map((q, i) => (
+            <div key={q.id} className="rounded-xl border p-3">
+              <div className="text-xs text-slate-500">{t("test.question")} {i + 1} / {q.points} {t("common.points")}</div>
+              <div className="mt-1 font-medium">{q.text}</div>
+              {q.type === "single_choice" ? (
+                <div className="mt-2 space-y-2">
+                  {q.options.map((option) => (
+                    <label key={option} className="flex gap-2 rounded-xl bg-slate-50 p-2 text-sm">
+                      <input type="radio" checked={responses[q.id] === option} onChange={() => updateTest(q.id, option)} />
+                      <span>{option}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <textarea
+                  value={responses[q.id] ?? ""}
+                  onChange={(e) => updateTest(q.id, e.target.value)}
+                  className="mt-2 min-h-24 w-full rounded-xl border bg-white p-3 text-sm"
+                  placeholder={t("test.writeAnswer")}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Button onClick={submitTest} disabled={questions.length === 0} className="mt-4 rounded-2xl">
+        <Lock className="mr-2 h-4 w-4" /> {t("test.submit")}
+      </Button>
+      <p className="mt-2 text-xs text-slate-500">{t("common.offlineRetry")}</p>
+    </div>
+  );
 }
 
 function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveReportTree, updateReport, addReportPhoto, updateReportPhoto, submitReport, t }) {
@@ -1476,6 +1704,17 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
   const tree = draft[activeReportTree];
   const [photoStatus, setPhotoStatus] = useState("");
   const [fieldNotesFullscreen, setFieldNotesFullscreen] = useState(false);
+  const [handwritingOpen, setHandwritingOpen] = useState(false);
+  const [fullscreenPhoto, setFullscreenPhoto] = useState(null);
+  const [fullscreenNotesHeight, setFullscreenNotesHeight] = useState(55);
+  const [savedScrollY, setSavedScrollY] = useState(0);
+  const canvasRef = useRef(null);
+  const drawingRef = useRef(false);
+
+  const label = (key, fallback) => {
+    const translated = t(key);
+    return translated === key ? fallback : translated;
+  };
 
   function handlePhotoChange(event) {
     const input = event.target;
@@ -1510,19 +1749,157 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
     reader.readAsDataURL(file);
   }
 
-  function fieldNotesTextarea(className) {
+  function openFieldNotesFullscreen() {
+    setSavedScrollY(window.scrollY || 0);
+    setFieldNotesFullscreen(true);
+  }
+
+  function closeFieldNotesFullscreen() {
+    setFieldNotesFullscreen(false);
+    window.setTimeout(() => window.scrollTo({ top: savedScrollY, behavior: "smooth" }), 0);
+  }
+
+  function fieldNotesTextarea(className, style = {}) {
     return (
       <textarea
         value={tree.fieldNotes}
         onChange={(e) => updateReport(activeReportTree, "fieldNotes", e.target.value, "fieldNotes")}
-        placeholder={t("report.fieldPlaceholder")}
+        placeholder={label("report.fieldPlaceholder", "Terénní pozorování a pracovní poznámky...")}
         className={className}
+        style={{ resize: "vertical", ...style }}
         autoCapitalize="sentences"
         autoComplete="off"
         spellCheck="true"
         inputMode="text"
       />
     );
+  }
+
+  function prepareCanvasContext() {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+
+    const rect = canvas.getBoundingClientRect();
+    const ratio = window.devicePixelRatio || 1;
+    const targetWidth = Math.max(1, Math.round(rect.width * ratio));
+    const targetHeight = Math.max(1, Math.round(rect.height * ratio));
+
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      const previous = document.createElement("canvas");
+      previous.width = canvas.width;
+      previous.height = canvas.height;
+      previous.getContext("2d").drawImage(canvas, 0, 0);
+
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
+      const restored = canvas.getContext("2d");
+      restored.setTransform(1, 0, 0, 1, 0, 0);
+      restored.drawImage(previous, 0, 0, canvas.width, canvas.height);
+    }
+
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    return { canvas, ctx, rect };
+  }
+
+  function isStylusEvent(event) {
+    return event.pointerType === "pen";
+  }
+
+  function canvasPoint(event, rect) {
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
+  }
+
+  function beginHandwriting(event) {
+    if (!isStylusEvent(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const prepared = prepareCanvasContext();
+    if (!prepared) return;
+
+    const point = canvasPoint(event, prepared.rect);
+    drawingRef.current = true;
+    prepared.canvas.setPointerCapture?.(event.pointerId);
+    prepared.ctx.beginPath();
+    prepared.ctx.moveTo(point.x, point.y);
+  }
+
+  function drawHandwriting(event) {
+    if (!drawingRef.current || !isStylusEvent(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const prepared = prepareCanvasContext();
+    if (!prepared) return;
+
+    const point = canvasPoint(event, prepared.rect);
+    prepared.ctx.lineTo(point.x, point.y);
+    prepared.ctx.stroke();
+  }
+
+  function endHandwriting(event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    if (event?.pointerType && !isStylusEvent(event)) return;
+    drawingRef.current = false;
+    canvasRef.current?.releasePointerCapture?.(event.pointerId);
+  }
+
+  function clearHandwriting() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function saveHandwritingAsPhoto() {
+    const canvas = canvasRef.current;
+    const dataUrl = canvas.toDataURL("image/png");
+    addReportPhoto(activeReportTree, {
+      name: `handwriting-${activeReportTree}-${Date.now()}.png`,
+      type: "image/png",
+      size: Math.round((dataUrl.length * 3) / 4),
+      dataUrl,
+      description: "Rukopisné terénní poznámky",
+      useInReport: false,
+      createdAt: new Date().toISOString(),
+    });
+    clearHandwriting();
+    setHandwritingOpen(false);
+    setPhotoStatus(label("report.handwritingSaved", "Rukopisné poznámky byly uloženy mezi fotografie."));
+  }
+
+  function reportTreeCompleteness(treeName) {
+    const reportTree = draft[treeName] ?? { finalSections: {}, photos: [] };
+    const filled = REPORT_SECTIONS.filter((section) => String(reportTree.finalSections?.[section.key] ?? "").trim()).length;
+    const photosForReport = (reportTree.photos ?? []).filter((photo) => photo.useInReport ?? true);
+    const annotatedPhotos = photosForReport.filter((photo) => String(photo.description ?? "").trim()).length;
+
+    return {
+      filled,
+      total: REPORT_SECTIONS.length,
+      photosForReport: photosForReport.length,
+      annotatedPhotos,
+    };
+  }
+
+  function handleSubmitReport() {
+    const treeA = reportTreeCompleteness("Tree A");
+    const treeB = reportTreeCompleteness("Tree B");
+
+    const confirmed = window.confirm(
+      `Kontrola před odesláním reportu\n\nJe vyplněný report pro oba dva stromy (A+B)?\n\nStrom A: ${treeA.filled}/${treeA.total} sekcí\nStrom B: ${treeB.filled}/${treeB.total} sekcí\n\nJsou anotované fotografie k použití v reportu?\n\nStrom A: ${treeA.annotatedPhotos}/${treeA.photosForReport} anotovaných fotografií označených pro report\nStrom B: ${treeB.annotatedPhotos}/${treeB.photosForReport} anotovaných fotografií označených pro report\n\nPo potvrzení bude report odeslán a uzavřen.`
+    );
+
+    if (!confirmed) return;
+    submitReport();
   }
 
   return (
@@ -1563,13 +1940,19 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
               return (
                 <div key={photo.id} className="rounded-xl border bg-white p-3">
                   <div className="flex items-center gap-3">
-                    <div className="h-16 w-16 overflow-hidden rounded-lg bg-slate-200">
+                    <button
+                      type="button"
+                      onDoubleClick={() => setFullscreenPhoto(photo)}
+                      onClick={() => setFullscreenPhoto(photo)}
+                      className="h-16 w-16 overflow-hidden rounded-lg bg-slate-200"
+                      title={label("report.photoOpenFullscreen", "Dvojklikem otevřít na celou obrazovku")}
+                    >
                       {photo.dataUrl ? (
                         <img src={photo.dataUrl} alt={photo.name || photo.caption || photo.id} className="h-full w-full object-cover" />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">{photo.id}</div>
                       )}
-                    </div>
+                    </button>
                     <div className="min-w-0 text-xs">
                       <div className="truncate font-medium text-slate-900">{photo.name || photo.caption || photo.id}</div>
                       <div className="text-slate-500">{photo.type || "image"} · {photo.size ? `${Math.round(photo.size / 1024)} KB` : ""}</div>
@@ -1577,12 +1960,12 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
                   </div>
 
                   <label className="mt-3 block text-xs font-medium text-slate-600">
-                    {t("report.photoDescription")}
+                    {label("report.photoDescription", "Popis fotografie")}
                     <input
                       value={description}
                       maxLength={100}
                       onChange={(e) => updateReportPhoto(activeReportTree, photo.id, { description: e.target.value.slice(0, 100) })}
-                      placeholder={t("report.photoDescriptionPlaceholder")}
+                      placeholder={label("report.photoDescriptionPlaceholder", "Krátký popis, max. 100 znaků")}
                       className="mt-1 w-full rounded-xl border bg-white p-2 text-sm text-slate-950"
                     />
                     <span className="mt-1 block text-right text-[11px] text-slate-500">{description.length}/100</span>
@@ -1594,7 +1977,7 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
                       checked={useInReport}
                       onChange={(e) => updateReportPhoto(activeReportTree, photo.id, { useInReport: e.target.checked })}
                     />
-                    {t("report.photoUseInReport")}
+                    {label("report.photoUseInReport", "Použít v reportu")}
                   </label>
                 </div>
               );
@@ -1603,15 +1986,24 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
         )}
       </div>
 
-      <div className="mt-3 rounded-xl border bg-white p-3">
+      <div className="sticky top-3 z-10 mt-3 rounded-xl border bg-white p-3 shadow-sm">
         <div className="flex items-center justify-between gap-3">
-          <label className="text-sm font-semibold">{t("report.fieldNotesPrivate")}</label>
-          <Button onClick={() => setFieldNotesFullscreen(true)} variant="outline" className="rounded-2xl">
-            {t("report.openFullscreen")}
-          </Button>
+          <label className="text-sm font-semibold">
+            {label("report.fieldNotesPrivate", "Terénní poznámky (nevstupují do reportu)")}
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={openFieldNotesFullscreen} variant="outline" className="rounded-2xl">
+              {label("report.openFullscreen", "Otevřít na celou obrazovku")}
+            </Button>
+            <Button onClick={() => setHandwritingOpen(true)} variant="outline" className="rounded-2xl">
+              {label("report.openHandwriting", "Rukopisné poznámky")}
+            </Button>
+          </div>
         </div>
-        <p className="mt-1 text-xs text-slate-500">{t("report.fieldNotesPrivateHelper")}</p>
-        {fieldNotesTextarea("mt-2 min-h-28 w-full rounded-xl border bg-white p-3 text-sm")}
+        <p className="mt-1 text-xs text-slate-500">
+          {label("report.fieldNotesPrivateHelper", "Pracovní terénní poznámky. Nevstupují automaticky do finálního reportu.")}
+        </p>
+        {fieldNotesTextarea("mt-2 min-h-32 w-full rounded-xl border bg-white p-3 text-sm", { minHeight: "180px", maxHeight: "70vh" })}
       </div>
 
       <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -1628,23 +2020,117 @@ function ReportSection({ candidate, reportDrafts, activeReportTree, setActiveRep
         ))}
       </div>
 
-      <Button onClick={submitReport} className="mt-4 rounded-2xl">
+      <Button onClick={handleSubmitReport} className="mt-4 rounded-2xl">
         <Lock className="mr-2 h-4 w-4" /> {t("report.submit")}
       </Button>
       <p className="mt-2 text-xs text-slate-500">{t("common.offlineRetry")}</p>
 
       {fieldNotesFullscreen && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-white p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-semibold">{t("report.fieldNotesPrivate")}</h3>
-              <p className="text-sm text-slate-600">{t("report.fieldNotesFullscreenHelper")}</p>
+        <div className="fixed inset-0 z-50 flex bg-white">
+          <div className="flex w-12 items-center justify-center border-r bg-slate-50 p-2">
+            <input
+              type="range"
+              min="35"
+              max="85"
+              value={fullscreenNotesHeight}
+              onChange={(e) => setFullscreenNotesHeight(Number(e.target.value))}
+              className="h-64 rotate-[-90deg]"
+            />
+          </div>
+          <div className="flex flex-1 flex-col p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold">{label("report.fieldNotesPrivate", "Terénní poznámky (nevstupují do reportu)")}</h3>
+                <p className="text-sm text-slate-600">
+                  {label("report.fieldNotesFullscreenHelper", "Velký editor. Výšku pole upravíte posuvníkem vlevo.")}
+                </p>
+              </div>
+              <Button onClick={closeFieldNotesFullscreen} variant="outline" className="rounded-2xl">
+                {t("common.close")}
+              </Button>
             </div>
-            <Button onClick={() => setFieldNotesFullscreen(false)} variant="outline" className="rounded-2xl">
+            {fieldNotesTextarea("w-full rounded-2xl border bg-white p-4 text-lg leading-8", { height: `${fullscreenNotesHeight}vh` })}
+          </div>
+        </div>
+      )}
+
+      {fullscreenPhoto && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-slate-950 p-4 text-white">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="truncate text-lg font-semibold">{fullscreenPhoto.description || fullscreenPhoto.name || fullscreenPhoto.caption || fullscreenPhoto.id}</h3>
+              <p className="text-sm text-slate-300">{label("report.photoFullscreenHelper", "Obrázek můžete na iPadu přiblížit gestem pinch zoom.")}</p>
+            </div>
+            <Button onClick={() => setFullscreenPhoto(null)} variant="outline" className="rounded-2xl bg-white text-slate-950">
               {t("common.close")}
             </Button>
           </div>
-          {fieldNotesTextarea("min-h-0 flex-1 w-full rounded-2xl border bg-white p-4 text-lg leading-8")}
+          <div
+            className="min-h-0 flex-1 overflow-auto rounded-2xl bg-white p-2"
+            style={{ touchAction: "pinch-zoom pan-x pan-y" }}
+          >
+            <img
+              src={fullscreenPhoto.dataUrl}
+              alt={fullscreenPhoto.description || fullscreenPhoto.name || fullscreenPhoto.caption || fullscreenPhoto.id}
+              className="mx-auto h-auto max-h-none max-w-none rounded-xl"
+              style={{
+                width: "100%",
+                maxWidth: "none",
+                touchAction: "pinch-zoom pan-x pan-y",
+                WebkitUserSelect: "none",
+                userSelect: "none",
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {handwritingOpen && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-white p-4"
+          onContextMenu={(event) => event.preventDefault()}
+          onSelect={(event) => event.preventDefault()}
+          onSelectCapture={(event) => event.preventDefault()}
+          style={{
+            WebkitUserSelect: "none",
+            userSelect: "none",
+            WebkitTouchCallout: "none",
+            touchAction: "none",
+          }}
+        >
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold">{label("report.openHandwriting", "Rukopisné poznámky")}</h3>
+              <p className="text-sm text-slate-600">
+                {label("report.handwritingHelper", "Pište pouze stylusem do plátna. Dotyk prstem je ignorován kvůli ochraně před nechtěným kreslením dlaní.")}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={clearHandwriting} variant="outline" className="rounded-2xl">{label("report.clearHandwriting", "Vymazat")}</Button>
+              <Button onClick={saveHandwritingAsPhoto} className="rounded-2xl">{label("report.saveHandwriting", "Uložit rukopis")}</Button>
+              <Button onClick={() => setHandwritingOpen(false)} variant="outline" className="rounded-2xl">{t("common.close")}</Button>
+            </div>
+          </div>
+          <canvas
+            ref={canvasRef}
+            tabIndex={-1}
+            aria-label={label("report.openHandwriting", "Rukopisné poznámky")}
+            onPointerDown={beginHandwriting}
+            onPointerMove={drawHandwriting}
+            onPointerUp={endHandwriting}
+            onPointerCancel={endHandwriting}
+            onPointerLeave={endHandwriting}
+            onContextMenu={(event) => event.preventDefault()}
+            onSelect={(event) => event.preventDefault()}
+            className="min-h-0 flex-1 touch-none rounded-2xl border bg-white"
+            style={{
+              touchAction: "none",
+              WebkitUserSelect: "none",
+              userSelect: "none",
+              WebkitTouchCallout: "none",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          />
         </div>
       )}
     </div>
@@ -1664,6 +2150,8 @@ function ExaminerView({
   activePage,
   setActivePage,
   openOutdoor,
+  openWrittenReview,
+  openReportReview,
   selectedCandidate,
   selectedMode,
   activeOutdoorSection,
@@ -1694,6 +2182,7 @@ function ExaminerView({
   reportDrafts,
   qrFor,
   setScannerMode,
+  importOfflineCandidatePackageFile,
   examinerTimes,
   t,
 }) {
@@ -1707,6 +2196,20 @@ function ExaminerView({
             subtitle={t("examiner.view.subtitle")}
           />
           <ExaminerQuickHelp t={t} />
+          {loggedExaminer && (
+            <div className="mb-4 rounded-2xl border bg-slate-50 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h3 className="font-semibold">Offline balíček kandidáta</h3>
+                  <p className="mt-1 text-sm text-slate-600">Pokud nefunguje backend nebo internet, nahrajte zde JSON balíček exportovaný z Candidate portálu.</p>
+                </div>
+                <label className="rounded-2xl border bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50">
+                  Importovat offline balíček
+                  <input type="file" accept=".json,application/json" onChange={importOfflineCandidatePackageFile} className="hidden" />
+                </label>
+              </div>
+            </div>
+          )}
           <div className="grid gap-4 lg:grid-cols-3">
             {!loggedExaminer && (
               <div className="rounded-2xl border bg-white p-4">
@@ -1744,8 +2247,22 @@ function ExaminerView({
                   assignments={assignments}
                   setPrimary={setPrimary}
                   openOutdoor={openOutdoor}
+                  openWrittenReview={openWrittenReview}
+                  openReportReview={openReportReview}
+                  importOfflineCandidatePackageFile={importOfflineCandidatePackageFile}
+                  setScannerMode={setScannerMode}
                   t={t}
                 />
+              ) : activePage === "writtenReview" || activePage === "reportReview" ? (
+                <div>
+                  <Button onClick={() => setActivePage("landing")} variant="outline" className="mb-3 rounded-2xl">
+                    {t("outdoor.backToLanding")}
+                  </Button>
+                  <div className="rounded-2xl border bg-white p-4">
+                    <h3 className="font-semibold">{activePage === "writtenReview" ? "Oprava testu" : "Kontrola reportu"}</h3>
+                    <p className="mt-1 text-sm text-slate-600">{selectedCandidate.name} / {selectedCandidate.level}</p>
+                  </div>
+                </div>
               ) : (
                 <OutdoorForm
                   selectedCandidate={selectedCandidate}
@@ -1771,7 +2288,7 @@ function ExaminerView({
         </CardContent>
       </Card>
 
-      <ScoringCard
+      {(activePage === "writtenReview" || activePage === "reportReview") && <ScoringCard
         selectedCandidate={selectedCandidate}
         scoring={scoring}
         updateScore={updateScore}
@@ -1789,17 +2306,12 @@ function ExaminerView({
         testResponses={testResponses}
         reportDrafts={reportDrafts}
         t={t}
-      />
+      />}
     </>
   );
 }
-function ExaminerLanding({ examiner, confirmed, confirmExaminer, assignedCandidates, assignments, setPrimary, openOutdoor, t }) {
-  const readiness = [
-    { label: t("examiner.readiness.identity"), ready: confirmed },
-    { label: t("examiner.readiness.assignments"), ready: assignedCandidates.length > 0 },
-  ];
-
-  return <div className="grid gap-4 lg:grid-cols-3"><div className="rounded-2xl border bg-white p-4"><h3 className="font-semibold">{t("examiner.identity.title")}</h3>{[[t("examiner.identity.name"), examiner.name], [t("examiner.identity.registrationId"), examiner.registrationId]].map(([k, v]) => <div key={k} className="mt-3 rounded-xl bg-slate-100 p-3 text-sm"><div className="text-xs text-slate-500">{k}</div><div className="font-medium">{v}</div></div>)}<Button onClick={confirmExaminer} disabled={confirmed} className="mt-4 w-full rounded-2xl"><BadgeCheck className="mr-2 h-4 w-4" />{confirmed ? t("examiner.identity.confirmed") : t("examiner.identity.confirm")}</Button></div><div className="rounded-2xl border bg-white p-4 lg:col-span-2"><div className="mb-4 rounded-xl bg-slate-100 p-3 text-sm"><div className="font-semibold">{t("examiner.readiness.title")}</div><div className="mt-2 flex flex-wrap gap-2">{readiness.map((item) => <StatusPill key={item.label} tone={item.ready ? "good" : "warn"}>{item.label}</StatusPill>)}</div></div><h3 className="font-semibold">{t("examiner.worklist.title")}</h3><p className="mt-1 text-sm text-slate-600">{t("examiner.worklist.helper")}</p>{assignedCandidates.length === 0 ? <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><div className="font-semibold">{t("examiner.worklist.emptyTitle")}</div><p className="mt-1">{t("examiner.worklist.emptyHelper")}</p></div> : <div className="mt-4 grid gap-3 md:grid-cols-2">{assignedCandidates.map((c) => { const isPrimary = assignments[c.id]?.primary === examiner.id; return <div key={c.id} className="rounded-2xl border bg-white p-4"><div className="flex justify-between gap-3"><div><div className="font-semibold">{c.name}</div><div className="text-sm text-slate-600">{c.level}</div></div><StatusPill tone={isPrimary ? "good" : "default"}>{isPrimary ? t("examiner.role.primary") : t("examiner.role.secondary")}</StatusPill></div><label className="mt-3 flex items-center gap-2 rounded-xl bg-slate-100 p-3 text-sm"><input type="checkbox" checked={isPrimary} onChange={(e) => setPrimary(c.id, examiner.id, e.target.checked)} />{t("examiner.worklist.primaryCheckbox")}</label><Button onClick={() => openOutdoor(c.id)} disabled={!confirmed} className="mt-4 rounded-2xl">{t("examiner.worklist.openOutdoor")}</Button></div>; })}</div>}</div></div>;
+function ExaminerLanding({ examiner, confirmed, confirmExaminer, assignedCandidates, assignments, setPrimary, openOutdoor, openWrittenReview, openReportReview, importOfflineCandidatePackageFile, setScannerMode, t }) {
+  return <div className="grid gap-4 lg:grid-cols-3"><div className="rounded-2xl border bg-white p-4"><h3 className="font-semibold">{t("examiner.identity.title")}</h3>{[[t("examiner.identity.name"), examiner.name], [t("examiner.identity.registrationId"), examiner.registrationId]].map(([k, v]) => <div key={k} className="mt-3 rounded-xl bg-slate-100 p-3 text-sm"><div className="text-xs text-slate-500">{k}</div><div className="font-medium">{v}</div></div>)}<Button onClick={confirmExaminer} disabled={confirmed} className="mt-4 w-full rounded-2xl"><BadgeCheck className="mr-2 h-4 w-4" />{confirmed ? t("examiner.identity.confirmed") : t("examiner.identity.confirm")}</Button></div><div className="rounded-2xl border bg-white p-4 lg:col-span-2"><h3 className="font-semibold">{t("examiner.worklist.title")}</h3><p className="mt-1 text-sm text-slate-600">{t("examiner.worklist.helper")}</p>{assignedCandidates.length === 0 ? <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><div className="font-semibold">{t("examiner.worklist.emptyTitle")}</div><p className="mt-1">{t("examiner.worklist.emptyHelper")}</p></div> : <div className="mt-4 grid gap-3 md:grid-cols-2">{assignedCandidates.map((c) => { const isPrimary = assignments[c.id]?.primary === examiner.id; return <div key={c.id} className="rounded-2xl border bg-white p-4"><div className="flex justify-between gap-3"><div><div className="font-semibold">{c.name}</div><div className="text-sm text-slate-600">{c.level}</div></div><StatusPill tone={isPrimary ? "good" : "default"}>{isPrimary ? t("examiner.role.primary") : t("examiner.role.secondary")}</StatusPill></div><label className="mt-3 flex items-center gap-2 rounded-xl bg-slate-100 p-3 text-sm"><input type="checkbox" checked={isPrimary} onChange={(e) => setPrimary(c.id, examiner.id, e.target.checked)} />{t("examiner.worklist.primaryCheckbox")}</label><div className="mt-4 flex flex-wrap gap-2"><Button onClick={() => openOutdoor(c.id)} disabled={!confirmed} className="rounded-2xl">{t("examiner.worklist.openOutdoor")}</Button><Button onClick={() => openWrittenReview(c.id)} disabled={!confirmed} variant="outline" className="rounded-2xl">Oprava testu</Button>{c.level === "Consulting" && <Button onClick={() => openReportReview(c.id)} disabled={!confirmed} variant="outline" className="rounded-2xl">Kontrola reportu</Button>}<Button onClick={() => setScannerMode("Examiner")} disabled={!confirmed} variant="outline" className="rounded-2xl">Načíst QR</Button><label className={`rounded-2xl border bg-white px-4 py-2 text-sm font-medium ${confirmed ? "hover:bg-slate-50" : "pointer-events-none opacity-50"}`}>Načíst foto<input type="file" accept=".json,application/json" onChange={importOfflineCandidatePackageFile} className="hidden" disabled={!confirmed} /></label></div></div>; })}</div>}</div></div>;
 }
 
 function OutdoorForm({ selectedCandidate, selectedMode, activeOutdoorSection, setActiveOutdoorSection, outdoor, outdoorNotes, updateOutdoor, updateOutdoorNote, outdoorTotal, outdoorMax, submitOutdoor, archivePlan, practicingArchive, setActivePage, time, t }) {
@@ -1812,5 +2324,5 @@ function ScoringCard({ selectedCandidate, scoring, updateScore, generateEvaluati
   const writtenReview = computeWrittenTestReview(selectedCandidate, variants, testBank, testResponses);
   const reportReview = computeReportReview(reportDrafts?.[selectedCandidate.id] ?? createReportDraft());
 
-  return <Card className="rounded-2xl shadow-sm lg:col-span-3"><CardContent className="p-5"><SectionTitle icon={BadgeCheck} title={t("scoring.title")} subtitle={t("scoring.subtitle")} /><div className="grid gap-4 lg:grid-cols-3"><div className="rounded-2xl border bg-white p-4"><div className="font-semibold">{selectedCandidate.name}</div><div className="mt-4 text-sm text-slate-600">{t("scoring.status")}: <StatusPill>{selectedCandidate.status}</StatusPill></div></div><div className="rounded-2xl border bg-white p-4 lg:col-span-2"><div className="grid gap-3 md:grid-cols-3"><label className="text-sm font-medium">{t("scoring.written")} / {scoring.writtenMax}<input type="number" value={selectedCandidate.written ?? ""} onChange={(e) => updateScore("written", e.target.value)} className="mt-1 w-full rounded-xl border bg-white p-2" /></label><label className="text-sm font-medium">{t("scoring.outdoor")} / {scoring.outdoorMax}<input type="number" value={selectedCandidate.outdoor ?? ""} onChange={(e) => updateScore("outdoor", e.target.value)} className="mt-1 w-full rounded-xl border bg-white p-2" /></label>{selectedCandidate.level === "Consulting" && <label className="text-sm font-medium">{t("scoring.report")} / {scoring.reportMax}<input type="number" value={selectedCandidate.report ?? ""} onChange={(e) => updateScore("report", e.target.value)} className="mt-1 w-full rounded-xl border bg-white p-2" /></label>}</div><div className="mt-4 rounded-2xl border bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">{t("examiner.writtenReview.title")}</h3><p className="mt-1 text-sm text-slate-600">{t("examiner.writtenReview.variant")}: {writtenReview.variantCode || "-"}</p></div><div className="flex flex-wrap gap-2"><StatusPill>{writtenReview.correctCount} {t("examiner.writtenReview.correct")}</StatusPill><StatusPill>{writtenReview.unansweredCount} {t("examiner.writtenReview.unanswered")}</StatusPill><StatusPill>{writtenReview.computedScore} / {writtenReview.computedMax} {t("common.points")}</StatusPill></div></div><div className="mt-3 rounded-xl bg-slate-100 p-3 text-sm"><strong>{t("examiner.writtenReview.computedScore")}:</strong> {writtenReview.computedScore} / {writtenReview.computedMax}<p className="mt-1 text-xs text-slate-500">{t("examiner.writtenReview.helper")}</p><Button onClick={() => updateScore("written", writtenReview.computedScore)} disabled={writtenReview.computedMax === 0} variant="outline" className="mt-3 rounded-2xl">{t("examiner.writtenReview.apply")}</Button></div><div className="mt-3 space-y-3">{writtenReview.items.map((item, index) => <div key={item.question.id} className="rounded-xl border bg-white p-3 text-sm"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="text-xs text-slate-500">{t("test.question")} {index + 1} / {item.question.points} {t("common.points")}</div><div className="mt-1 font-medium">{item.question.text}</div></div><StatusPill tone={!item.hasAnswer ? "warn" : item.hasCorrectAnswer ? item.correct ? "good" : "bad" : "default"}>{!item.hasAnswer ? t("examiner.writtenReview.unanswered") : item.hasCorrectAnswer ? item.correct ? t("examiner.writtenReview.correct") : t("examiner.writtenReview.incorrect") : t("examiner.writtenReview.manual")}</StatusPill></div><div className="mt-2 rounded-lg bg-slate-50 p-2"><div className="text-xs font-semibold text-slate-500">{t("examiner.writtenReview.candidateAnswer")}</div><div className="mt-1 whitespace-pre-wrap">{item.hasAnswer ? item.answer : "-"}</div></div>{item.hasCorrectAnswer && <div className="mt-2 rounded-lg bg-emerald-50 p-2"><div className="text-xs font-semibold text-emerald-800">{t("examiner.writtenReview.correctAnswer")}</div><div className="mt-1 whitespace-pre-wrap text-emerald-950">{item.question.correctAnswer}</div></div>}</div>)}</div></div>{selectedCandidate.level === "Consulting" && <div className="mt-4 rounded-2xl border bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">{t("examiner.reportReview.title")}</h3><p className="mt-1 text-sm text-slate-600">{t("examiner.reportReview.helper")}</p></div><div className="flex flex-wrap gap-2"><StatusPill>{reportReview.filledSections} / {reportReview.totalSections} {t("examiner.reportReview.sections")}</StatusPill><StatusPill>{reportReview.photos} {t("examiner.reportReview.photos")}</StatusPill><StatusPill>{reportReview.completeness}% {t("examiner.reportReview.complete")}</StatusPill></div></div><div className="mt-3 space-y-4">{reportReview.trees.map((tree) => <div key={tree.treeName} className="rounded-xl border bg-white p-3 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><h4 className="font-semibold">{tree.treeName}</h4><div className="flex flex-wrap gap-2"><StatusPill>{tree.filledSections} / {tree.totalSections} {t("examiner.reportReview.sections")}</StatusPill><StatusPill>{tree.photos.length} {t("examiner.reportReview.photos")}</StatusPill></div></div><div className="mt-3 rounded-lg bg-slate-50 p-2"><div className="text-xs font-semibold text-slate-500">{t("report.fieldNotes")}</div><div className="mt-1 whitespace-pre-wrap">{String(tree.fieldNotes).trim() || "-"}</div></div>{tree.photos.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2 md:grid-cols-3">{tree.photos.map((photo) => <div key={photo.id} className="flex items-center gap-3 rounded-xl border bg-white p-2"><div className="h-16 w-16 overflow-hidden rounded-lg bg-slate-200">{photo.dataUrl ? <img src={photo.dataUrl} alt={photo.name || photo.caption || photo.id} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">{photo.id}</div>}</div><div className="min-w-0 text-xs"><div className="truncate font-medium text-slate-900">{photo.name || photo.caption || photo.id}</div><div className="text-slate-500">{photo.type || "image"} · {photo.size ? `${Math.round(photo.size / 1024)} KB` : ""}</div></div></div>)}</div>}<div className="mt-3 grid gap-3 md:grid-cols-2">{tree.finalSections.map((section) => <div key={section.key} className="rounded-lg bg-slate-50 p-2"><div className="flex items-center justify-between gap-2"><div className="text-xs font-semibold text-slate-500">{section.title}</div><StatusPill tone={section.filled ? "good" : "warn"}>{section.filled ? t("examiner.reportReview.filled") : t("examiner.reportReview.missing")}</StatusPill></div><div className="mt-1 whitespace-pre-wrap">{String(section.value).trim() || "-"}</div></div>)}</div></div>)}</div></div>}<div className="mt-4 grid gap-3 md:grid-cols-5"><div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">{t("scoring.total")}</div><div className="text-xl font-bold">{scoring.total} / {scoring.max}</div></div><div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">{t("scoring.percentage")}</div><div className="text-xl font-bold">{scoring.percentage}%</div></div><div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">{t("scoring.result")}</div><div className="text-xl font-bold">{scoring.pass ? t("scoring.pass") : t("scoring.notPassed")}</div></div><Button onClick={generateEvaluation} className="h-full rounded-2xl"><FileSpreadsheet className="mr-2 h-4 w-4" /> {t("scoring.generate")}</Button><Button onClick={() => loadEvaluationPreview(selectedCandidate.id)} disabled={evaluationLoading} variant="outline" className="h-full rounded-2xl">{evaluationLoading ? t("scoring.loading") : t("scoring.loadPreview")}</Button><Button onClick={() => downloadDraftExport(selectedCandidate.id)} disabled={exportLoading} variant="outline" className="h-full rounded-2xl"><FileSpreadsheet className="mr-2 h-4 w-4" /> {exportLoading ? t("scoring.exporting") : t("scoring.downloadDraftExport")}</Button></div><p className="mt-3 text-xs text-slate-500">{t("scoring.draftOnly")}</p>{evaluationError && <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">{evaluationError}</div>}{exportError && <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">{exportError}</div>}{lastEvaluation && <div className="mt-4 rounded-2xl border bg-white p-4 text-sm"><div className="font-semibold">{t("scoring.lastGenerated")}</div><div className="mt-1 text-slate-600">{lastEvaluation.candidate} / {lastEvaluation.level}: {lastEvaluation.total}/{lastEvaluation.max} ({lastEvaluation.percentage}%) - {lastEvaluation.result}</div></div>}<EvaluationPreviewCard preview={evaluationPreview} t={t} /></div></div></CardContent></Card>;
+  return <Card className="rounded-2xl shadow-sm lg:col-span-3"><CardContent className="p-5"><SectionTitle icon={BadgeCheck} title={t("scoring.title")} subtitle={t("scoring.subtitle")} /><div className="grid gap-4"><div className="rounded-2xl border bg-white p-4"><div className="grid gap-3 md:grid-cols-3"><label className="text-sm font-medium">{t("scoring.written")} / {scoring.writtenMax}<input type="number" value={selectedCandidate.written ?? ""} onChange={(e) => updateScore("written", e.target.value)} className="mt-1 w-full rounded-xl border bg-white p-2" /></label><label className="text-sm font-medium">{t("scoring.outdoor")} / {scoring.outdoorMax}<input type="number" value={selectedCandidate.outdoor ?? ""} onChange={(e) => updateScore("outdoor", e.target.value)} className="mt-1 w-full rounded-xl border bg-white p-2" /></label>{selectedCandidate.level === "Consulting" && <label className="text-sm font-medium">{t("scoring.report")} / {scoring.reportMax}<input type="number" value={selectedCandidate.report ?? ""} onChange={(e) => updateScore("report", e.target.value)} className="mt-1 w-full rounded-xl border bg-white p-2" /></label>}</div><div className="mt-4 rounded-2xl border bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">{t("examiner.writtenReview.title")}</h3><p className="mt-1 text-sm text-slate-600">{t("examiner.writtenReview.variant")}: {writtenReview.variantCode || "-"}</p></div><div className="flex flex-wrap gap-2"><StatusPill>{writtenReview.correctCount} {t("examiner.writtenReview.correct")}</StatusPill><StatusPill>{writtenReview.unansweredCount} {t("examiner.writtenReview.unanswered")}</StatusPill><StatusPill>{writtenReview.computedScore} / {writtenReview.computedMax} {t("common.points")}</StatusPill></div></div><div className="mt-3 rounded-xl bg-slate-100 p-3 text-sm"><strong>{t("examiner.writtenReview.computedScore")}:</strong> {writtenReview.computedScore} / {writtenReview.computedMax}<p className="mt-1 text-xs text-slate-500">{t("examiner.writtenReview.helper")}</p><Button onClick={() => updateScore("written", writtenReview.computedScore)} disabled={writtenReview.computedMax === 0} variant="outline" className="mt-3 rounded-2xl">{t("examiner.writtenReview.apply")}</Button></div><div className="mt-3 space-y-3">{writtenReview.items.map((item, index) => <div key={item.question.id} className="rounded-xl border bg-white p-3 text-sm"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="text-xs text-slate-500">{t("test.question")} {index + 1} / {item.question.points} {t("common.points")}</div><div className="mt-1 font-medium">{item.question.text}</div></div><StatusPill tone={!item.hasAnswer ? "warn" : item.hasCorrectAnswer ? item.correct ? "good" : "bad" : "default"}>{!item.hasAnswer ? t("examiner.writtenReview.unanswered") : item.hasCorrectAnswer ? item.correct ? t("examiner.writtenReview.correct") : t("examiner.writtenReview.incorrect") : t("examiner.writtenReview.manual")}</StatusPill></div><div className="mt-2 rounded-lg bg-slate-50 p-2"><div className="text-xs font-semibold text-slate-500">{t("examiner.writtenReview.candidateAnswer")}</div><div className="mt-1 whitespace-pre-wrap">{item.hasAnswer ? item.answer : "-"}</div></div>{item.hasCorrectAnswer && <div className="mt-2 rounded-lg bg-emerald-50 p-2"><div className="text-xs font-semibold text-emerald-800">{t("examiner.writtenReview.correctAnswer")}</div><div className="mt-1 whitespace-pre-wrap text-emerald-950">{item.question.correctAnswer}</div></div>}</div>)}</div></div>{selectedCandidate.level === "Consulting" && <div className="mt-4 rounded-2xl border bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">{t("examiner.reportReview.title")}</h3><p className="mt-1 text-sm text-slate-600">{t("examiner.reportReview.helper")}</p></div><div className="flex flex-wrap gap-2"><StatusPill>{reportReview.filledSections} / {reportReview.totalSections} {t("examiner.reportReview.sections")}</StatusPill><StatusPill>{reportReview.photos} {t("examiner.reportReview.photos")}</StatusPill><StatusPill>{reportReview.completeness}% {t("examiner.reportReview.complete")}</StatusPill></div></div><div className="mt-3 space-y-4">{reportReview.trees.map((tree) => <div key={tree.treeName} className="rounded-xl border bg-white p-3 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><h4 className="font-semibold">{tree.treeName}</h4><div className="flex flex-wrap gap-2"><StatusPill>{tree.filledSections} / {tree.totalSections} {t("examiner.reportReview.sections")}</StatusPill><StatusPill>{tree.photos.length} {t("examiner.reportReview.photos")}</StatusPill></div></div><div className="mt-3 rounded-lg bg-slate-50 p-2"><div className="text-xs font-semibold text-slate-500">{t("report.fieldNotes")}</div><div className="mt-1 whitespace-pre-wrap">{String(tree.fieldNotes).trim() || "-"}</div></div>{tree.photos.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2 md:grid-cols-3">{tree.photos.map((photo) => <div key={photo.id} className="flex items-center gap-3 rounded-xl border bg-white p-2"><div className="h-16 w-16 overflow-hidden rounded-lg bg-slate-200">{photo.dataUrl ? <img src={photo.dataUrl} alt={photo.name || photo.caption || photo.id} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">{photo.id}</div>}</div><div className="min-w-0 text-xs"><div className="truncate font-medium text-slate-900">{photo.name || photo.caption || photo.id}</div><div className="text-slate-500">{photo.type || "image"} · {photo.size ? `${Math.round(photo.size / 1024)} KB` : ""}</div></div></div>)}</div>}<div className="mt-3 grid gap-3 md:grid-cols-2">{tree.finalSections.map((section) => <div key={section.key} className="rounded-lg bg-slate-50 p-2"><div className="flex items-center justify-between gap-2"><div className="text-xs font-semibold text-slate-500">{section.title}</div><StatusPill tone={section.filled ? "good" : "warn"}>{section.filled ? t("examiner.reportReview.filled") : t("examiner.reportReview.missing")}</StatusPill></div><div className="mt-1 whitespace-pre-wrap">{String(section.value).trim() || "-"}</div></div>)}</div></div>)}</div></div>}<div className="mt-4 grid gap-3 md:grid-cols-5"><div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">{t("scoring.total")}</div><div className="text-xl font-bold">{scoring.total} / {scoring.max}</div></div><div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">{t("scoring.percentage")}</div><div className="text-xl font-bold">{scoring.percentage}%</div></div><div className="rounded-xl bg-slate-100 p-3"><div className="text-xs text-slate-500">{t("scoring.result")}</div><div className="text-xl font-bold">{scoring.pass ? t("scoring.pass") : t("scoring.notPassed")}</div></div><Button onClick={generateEvaluation} className="h-full rounded-2xl"><FileSpreadsheet className="mr-2 h-4 w-4" /> {t("scoring.generate")}</Button><Button onClick={() => loadEvaluationPreview(selectedCandidate.id)} disabled={evaluationLoading} variant="outline" className="h-full rounded-2xl">{evaluationLoading ? t("scoring.loading") : t("scoring.loadPreview")}</Button><Button onClick={() => downloadDraftExport(selectedCandidate.id)} disabled={exportLoading} variant="outline" className="h-full rounded-2xl"><FileSpreadsheet className="mr-2 h-4 w-4" /> {exportLoading ? t("scoring.exporting") : t("scoring.downloadDraftExport")}</Button></div><p className="mt-3 text-xs text-slate-500">{t("scoring.draftOnly")}</p>{evaluationError && <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">{evaluationError}</div>}{exportError && <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">{exportError}</div>}{lastEvaluation && <div className="mt-4 rounded-2xl border bg-white p-4 text-sm"><div className="font-semibold">{t("scoring.lastGenerated")}</div><div className="mt-1 text-slate-600">{lastEvaluation.candidate} / {lastEvaluation.level}: {lastEvaluation.total}/{lastEvaluation.max} ({lastEvaluation.percentage}%) - {lastEvaluation.result}</div></div>}<EvaluationPreviewCard preview={evaluationPreview} t={t} /></div></div></CardContent></Card>;
 }
