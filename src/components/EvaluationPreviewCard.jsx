@@ -69,7 +69,7 @@ export function EvaluationPreviewCard({ preview, t }) {
               <div className="font-semibold">{reportSummary.finalSectionsFilled ?? 0}</div>
             </div>
             <div>
-              <div className="text-xs text-slate-500">{tr(t, "evaluation.preview.photoPlaceholders", "Photo placeholders")}</div>
+              <div className="text-xs text-slate-500">{tr(t, "evaluation.preview.photoPlaceholders", "Photo records")}</div>
               <div className="font-semibold">{reportSummary.photoPlaceholdersTotal ?? 0}</div>
             </div>
             <div>

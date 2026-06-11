@@ -18,7 +18,7 @@ export function CentreQrAccessPack({ candidates, examiners, candidateQrUrl, exam
       <SectionTitle
         icon={QrCodeIcon}
         title={tr(t, "qr.title", "Centre / QR access pack")}
-        subtitle={tr(t, "qr.subtitle", "Give each Candidate or Examiner only their own Candidate QR or Examiner QR link. Backend-loaded QR URLs appear after Load/Save Centre Setup; demo fallback QR links are for local prototype testing only.")}
+        subtitle={tr(t, "qr.subtitle", "Give each Candidate or Examiner only their own Candidate QR or Examiner QR link. Centre-loaded QR URLs appear after Load/Save Centre Setup. Local QR links are shown only when no saved Centre URL is available.")}
       />
       {copiedQr && <div className="mb-3 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">{copiedQr}</div>}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -37,7 +37,7 @@ export function CentreQrAccessPack({ candidates, examiners, candidateQrUrl, exam
                       <div className="text-sm text-slate-600">{c.level}</div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <StatusPill tone={backendUrl ? "good" : "warn"}>
-                          {backendUrl ? tr(t, "qr.candidateBackend", "backend-loaded Candidate QR") : tr(t, "qr.candidateDemo", "demo fallback Candidate QR")}
+                          {backendUrl ? tr(t, "qr.candidateBackend", "backend-loaded Candidate QR") : tr(t, "qr.candidateDemo", "local Candidate QR")}
                         </StatusPill>
                         <Button onClick={() => copyQrLink(c.id, accessUrl)} variant="outline" className="rounded-2xl">{tr(t, "qr.copy", "Copy link")}</Button>
                       </div>
@@ -65,7 +65,7 @@ export function CentreQrAccessPack({ candidates, examiners, candidateQrUrl, exam
                       <div className="text-sm text-slate-600">{ex.registrationId}</div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <StatusPill tone={backendUrl ? "good" : "warn"}>
-                          {backendUrl ? tr(t, "qr.examinerBackend", "backend-loaded Examiner QR") : tr(t, "qr.examinerDemo", "demo fallback Examiner QR")}
+                          {backendUrl ? tr(t, "qr.examinerBackend", "backend-loaded Examiner QR") : tr(t, "qr.examinerDemo", "local Examiner QR")}
                         </StatusPill>
                         <Button onClick={() => copyQrLink(ex.id, accessUrl)} variant="outline" className="rounded-2xl">{tr(t, "qr.copy", "Copy link")}</Button>
                       </div>

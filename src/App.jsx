@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { bootstrapSession, resolveQrToken, syncBatch, fetchCandidateEvaluation, exportCandidateEvaluation, exportCentreAuditPackage, downloadBase64File, loadCentreSetup } from "./lib/api";
-import { CandidateQuickHelp, ExaminerQuickHelp, PilotReleaseNotesPanel, PilotSmokeTestChecklist } from "./components/PilotInfoPanels";
+import { CandidateQuickHelp, ExaminerQuickHelp } from "./components/UserHelpPanels";
 import { EvaluationPreviewCard } from "./components/EvaluationPreviewCard";
 import { AuditSyncView } from "./components/AuditSyncView";
-import { CentreNetworkReadinessChecklist, CentreValidationSummary, PilotReadinessGuardrails, PilotRunSummary } from "./components/CentreReadinessPanels";
+import { CentreNetworkReadinessChecklist, CentreValidationSummary } from "./components/CentreReadinessPanels";
 import { CentreQrAccessPack } from "./components/CentreQrAccessPack";
 import { LANGUAGES as UI_LANGUAGES, makeTranslator } from "./i18n";
 import { QRCodeSVG } from "qrcode.react";
@@ -639,7 +639,7 @@ function QrScannerPanel({ title, onScan, onClose, t }) {
           <div>
             <h3 className="text-lg font-semibold">{title}</h3>
             <p className="text-sm text-slate-600">
-              QR kamera je dočasně vypnutá kvůli stabilitě Examiner portálu. Použijte ruční vložení QR odkazu nebo offline payloadu.
+              Použijte ruční vložení QR odkazu nebo offline balíčku.
             </p>
           </div>
           <Button onClick={onClose} variant="outline" className="rounded-2xl">
@@ -648,17 +648,17 @@ function QrScannerPanel({ title, onScan, onClose, t }) {
         </div>
 
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-          <div className="font-semibold">Stabilní fallback režim</div>
+          <div className="font-semibold">Ruční načtení QR</div>
           <p className="mt-1">
             Zkopírujte QR odkaz / obsah QR kódu ze zdrojového zařízení a vložte jej níže.
-            Kamerové skenování vrátíme samostatně až po ověření na HTTPS tabletu.
+            Tato volba načte stejný obsah jako QR kód.
           </p>
         </div>
 
         <div className="mt-4 rounded-2xl border bg-white p-4">
-          <h4 className="font-semibold">Ruční načtení QR payloadu</h4>
+          <h4 className="font-semibold">Ruční načtení QR odkazu</h4>
           <p className="mt-1 text-sm text-slate-600">
-            Vložte sem odkaz z QR kódu, obsah QR, nebo offline JSON manifest kandidáta.
+            Vložte sem odkaz z QR kódu, obsah QR, nebo offline JSON balíček kandidáta.
           </p>
           <textarea
             value={manualPayload}
@@ -883,7 +883,7 @@ function VetBaraPrototype() {
           setActiveAdminPackageMeta(activePackageRuntimeMeta(data));
         }
       } catch {
-        // Keep the demo fallback available when no local Admin package endpoint is running.
+        // Keep the local available when no local Admin package endpoint is running.
       }
     }
 
@@ -1080,10 +1080,10 @@ function VetBaraPrototype() {
       const session = await bootstrapSession(resolved.sessionToken);
       return { ...resolved, ...session, sessionToken: resolved.sessionToken };
     } catch (error) {
-      console.error("Session bootstrap failed; using local demo fallback when available", error);
+      console.error("Session bootstrap failed; using local local when available", error);
       const fallback = demoAccess(parsed);
       if (fallback) {
-        addAudit("Backend unavailable", fallback.subjectId ?? fallback.role, `${detail}; local demo fallback used`);
+        addAudit("Local server unavailable", fallback.subjectId ?? fallback.role, `${detail}; local data used`);
         return fallback;
       }
       addAudit("QR resolve failed", parsed.id ?? "Unknown QR", "The QR could not be verified.");
@@ -2121,7 +2121,7 @@ function VetBaraPrototype() {
   if (runtimeError) return <RuntimeCrashScreen error={runtimeError} />;
 
   return <main className="min-h-screen bg-slate-50 p-4 text-slate-900 md:p-8"><div className="mx-auto max-w-7xl">
-    <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div className="flex items-start gap-4"><img src="/brand/vetcert-logo.jpg" alt="VETcert Certified Veteran Tree Specialist" className="h-14 w-14 shrink-0 rounded-full border bg-white object-contain p-1 shadow-sm md:h-16 md:w-16" /><div><div className="mb-2 flex flex-wrap items-center gap-2"><div className="rounded-2xl bg-slate-950 px-3 py-1 text-sm font-semibold text-white">{t("app.title")}</div><StatusPill tone="warn">{t("app.mvpPrototype")}</StatusPill><StatusPill><CloudOff className="mr-1 h-3.5 w-3.5" /> {t("app.offlineFirst")}</StatusPill></div><h1 className="text-3xl font-bold tracking-tight md:text-5xl">{t("app.heroTitle")}</h1><p className="mt-2 max-w-3xl text-slate-600">{t("app.subtitle")}</p></div></div><div className="flex flex-wrap items-center gap-2"><label className="text-xs font-medium text-slate-500">{t("language.label")}<select value={uiLanguage} onChange={(e) => setUiLanguage(e.target.value)} className="ml-2 rounded-xl border bg-white p-2 text-sm text-slate-950">{UI_LANGUAGES.map((lang) => <option key={lang.code} value={lang.code}>{lang.draft ? `${lang.label} - draft` : lang.label}</option>)}</select></label>{lockedPortalRole ? <StatusPill tone="good">{tf("app.dedicatedPortal", { role: roleLabel(lockedPortalRole) })}</StatusPill> : role === "Admin" ? <StatusPill tone="good">Admin</StatusPill> : ROLES.map((r) => <Button key={r} onClick={() => setRole(r)} variant={role === r ? "default" : "outline"} className="rounded-2xl">{roleLabel(r)}</Button>)}</div></header>
+    <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div className="flex items-start gap-4"><img src="/brand/vetcert-logo.jpg" alt="VETcert Certified Veteran Tree Specialist" className="h-14 w-14 shrink-0 rounded-full border bg-white object-contain p-1 shadow-sm md:h-16 md:w-16" /><div><div className="mb-2 flex flex-wrap items-center gap-2"><div className="rounded-2xl bg-slate-950 px-3 py-1 text-sm font-semibold text-white">{t("app.title")}</div><StatusPill tone="good">{t("app.versionReady")}</StatusPill><StatusPill><CloudOff className="mr-1 h-3.5 w-3.5" /> {t("app.offlineFirst")}</StatusPill></div><h1 className="text-3xl font-bold tracking-tight md:text-5xl">{t("app.heroTitle")}</h1><p className="mt-2 max-w-3xl text-slate-600">{t("app.subtitle")}</p></div></div><div className="flex flex-wrap items-center gap-2"><label className="text-xs font-medium text-slate-500">{t("language.label")}<select value={uiLanguage} onChange={(e) => setUiLanguage(e.target.value)} className="ml-2 rounded-xl border bg-white p-2 text-sm text-slate-950">{UI_LANGUAGES.map((lang) => <option key={lang.code} value={lang.code}>{lang.draft ? `${lang.label} - draft` : lang.label}</option>)}</select></label>{lockedPortalRole ? <StatusPill tone="good">{tf("app.dedicatedPortal", { role: roleLabel(lockedPortalRole) })}</StatusPill> : role === "Admin" ? <StatusPill tone="good">Admin</StatusPill> : ROLES.map((r) => <Button key={r} onClick={() => setRole(r)} variant={role === r ? "default" : "outline"} className="rounded-2xl">{roleLabel(r)}</Button>)}</div></header>
     {draftPreviewActive && <div role="status" className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-950 shadow-sm">{t("language.draftPreviewWarning")}</div>}
     <div className="grid gap-4 lg:grid-cols-3">
       {role === "Admin" && <AdminView centre={centre} setCentre={setCentre} examDate={examDate} setExamDate={setExamDate} place={place} setPlace={setPlace} language={language} setLanguage={setLanguage} availableVariants={availableVariants} variants={variants} testImportStatus={testImportStatus} testImportError={testImportError} testImportSummary={testImportSummary} importTestPackage={importTestPackage} setStatus={setStatus} addAudit={addAudit} setScannerMode={setScannerMode} centreQr={payload("Centre", CENTRE_QR_ID, CENTRE_ACCESS_TOKEN)} t={t}  adminPdfPackageStatus={adminPdfPackageStatus} adminPdfPackageError={adminPdfPackageError} adminPdfPackageList={adminPdfPackageList} adminPdfPackageLatest={adminPdfPackageLatest} setAdminPdfPackageStatus={setAdminPdfPackageStatus} setAdminPdfPackageError={setAdminPdfPackageError} setAdminPdfPackageList={setAdminPdfPackageList} setAdminPdfPackageLatest={setAdminPdfPackageLatest} />}
@@ -3565,7 +3565,7 @@ function examinerNameById(examiners, examinerId) {
   return examiners.find((examiner) => examiner.id === examinerId)?.name || examinerId || "-";
 }
 
-function PilotWorkflowDashboard({ candidates, assignments, examiners, centreValidationIssues, testImportSummary, candidateConfirmed, candidateStatus, candidateTimes, testResponses, reportDrafts, outdoor, centreSetupStatus, dataMode, t }) {
+function ExamWorkflowDashboard({ candidates, assignments, examiners, centreValidationIssues, testImportSummary, candidateConfirmed, candidateStatus, candidateTimes, testResponses, reportDrafts, outdoor, centreSetupStatus, dataMode, t }) {
   const assignmentCount = candidates.reduce((total, candidate) => {
     const assignment = assignments[candidate.id] ?? {};
     return total + (assignment.primary ? 1 : 0) + (assignment.secondary ? 1 : 0);
@@ -4481,7 +4481,7 @@ function CentreFieldPreparationModule({ centreCode, language }) {
 
           <div className="rounded-2xl border bg-white p-4">
             <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <div><h3 className="font-semibold">Mapový náhled stanoviště</h3><p className="text-sm text-slate-600">MVP zobrazuje pracovní mapové plátno s GPS body. Reálné Leaflet/ČÚZK vrstvy jsou připravené jako další technický krok modulu.</p></div>
+              <div><h3 className="font-semibold">Mapový náhled stanoviště</h3><p className="text-sm text-slate-600">Mapový náhled používá aktuální data přípravy stanoviště, souřadnice centra a přiřazené stromy pro obě úrovně zkoušky.</p></div>
               <div className="text-xs text-slate-500">Reference: {Number(prep.referenceLatitude).toFixed(6)}, {Number(prep.referenceLongitude).toFixed(6)}</div>
             </div>
             <div ref={centreMapRef} onPointerMove={moveCentreDrag} onPointerUp={endCentreDrag} onPointerCancel={endCentreDrag} className="relative h-[520px] touch-none overflow-hidden rounded-2xl border bg-slate-100">
@@ -5621,7 +5621,7 @@ function CentreView({ centreUnlocked, centreCode, setCentreCode, unlockCentre, e
                 <input value={centreCode} onChange={(event) => setCentreCode(event.target.value)} placeholder={t("centre.access.placeholder")} className="w-full rounded-xl border bg-white p-2 font-mono text-sm" />
                 <Button onClick={unlockCentre} className="rounded-2xl">{t("centre.access.open")}</Button>
               </div>
-              <div className="mt-2 text-xs text-slate-500">{t("centre.access.prototypeToken")}: {CENTRE_ACCESS_TOKEN}</div>
+              <div className="mt-2 text-xs text-slate-500">{t("centre.access.centreToken")}: {CENTRE_ACCESS_TOKEN}</div>
             </div>
           </CardContent>
         </Card>
@@ -5704,11 +5704,7 @@ function CentreView({ centreUnlocked, centreCode, setCentreCode, unlockCentre, e
                 {centreAuditExportError && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">{centreAuditExportError}</div>}
                 <div className="mt-4 space-y-4">
                   <VetCertRulesReference />
-                  <PilotReadinessGuardrails centreValidationIssues={centreValidationIssues} centreSetupDirty={centreSetupDirty} testImportSummary={testImportSummary} dataMode={dataMode} StatusPill={StatusPill} t={t} />
-                  <PilotRunSummary centreValidationIssues={centreValidationIssues} centreSetupDirty={centreSetupDirty} testImportSummary={testImportSummary} dataMode={dataMode} StatusPill={StatusPill} t={t} />
                   <CentreNetworkReadinessChecklist StatusPill={StatusPill} t={t} />
-                  <PilotSmokeTestChecklist StatusPill={StatusPill} t={t} />
-                  <PilotReleaseNotesPanel StatusPill={StatusPill} t={t} />
                 </div>
               </div>
             )}
@@ -8556,7 +8552,7 @@ function ExaminerWrittenReview({ selectedCandidate, variants, testBank, testResp
       {Boolean(importedPackage) && reviewQuestions.length === 0 && (
         <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-950">
           Tento importovaný kandidátský balíček neobsahuje snapshot testových otázek z Centre/Admin balíčku.
-          Examiner proto může vidět lokální fallback variantu, která nemusí odpovídat jazyku ani obsahu reálné zkoušky.
+          Examiner proto může vidět lokální variantu, která nemusí odpovídat jazyku ani obsahu reálné zkoušky.
           Po této opravě je nutné kandidátský balíček vytvořit znovu.
         </div>
       )}
@@ -8565,7 +8561,7 @@ function ExaminerWrittenReview({ selectedCandidate, variants, testBank, testResp
         {!hasStrictQuestions && (
           <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-950">
             Tato testová varianta nemá načtené otázky z Admin/Centre balíčku: {effectiveVariantCode}.
-            Test se nesmí automaticky přepnout na jiný jazyk nebo lokální fallback.
+            Test se nesmí automaticky přepnout na jiný jazyk nebo lokální variantu.
           </div>
         )}
         {questions.length === 0 ? (
@@ -9335,7 +9331,7 @@ function OutdoorForm({ selectedCandidate, selectedMode, activeOutdoorSection, se
   const total = outdoorSections.reduce((sum, section) => sum + outdoorTotal(selectedCandidate.id, selectedCandidate.level, section), 0);
   const max = outdoorSections.reduce((sum, section) => sum + outdoorMax(selectedCandidate.level, section), 0) || scoreLimits(selectedCandidate.level).outdoorMax;
 
-  return <div className="grid gap-4 lg:grid-cols-3"><div><Button onClick={() => setActivePage("landing")} variant="outline" className="mb-3 rounded-2xl">{t("outdoor.backToLanding")}</Button><h3 className="font-semibold">{t("outdoor.candidateBinding")}</h3><div className="mt-3 rounded-xl bg-slate-100 p-3 text-sm">{t("outdoor.activeRecord")}: <strong>{selectedCandidate.name}</strong><br />{t("outdoor.level")}: <strong>{selectedCandidate.level}</strong><br />{t("outdoor.total")}: <strong>{total}</strong> / {max}<br />{t("common.opened")}: {time?.openedAt || "-"}<br />{t("common.closed")}: {time?.closedAt || "-"}<br /><span className={isOutdoorFallback ? "text-amber-700" : "text-emerald-700"}>{isOutdoorFallback ? "Outdoor source: demo fallback" : "Outdoor source: active Admin package"}</span></div>{selectedCandidate.level === "Practicing" && <div className="mt-3 rounded-xl border bg-white p-3 text-sm"><div className="font-semibold">{t("outdoor.paperArchive.title")}</div><p className="mt-1 text-slate-600">{t("outdoor.paperArchive.helper")}</p><Button onClick={archivePlan} variant="outline" className="mt-3 w-full rounded-2xl">{t("outdoor.paperArchive.button")}</Button><div className="mt-2 text-xs text-slate-500">{t("outdoor.paperArchive.photos")}: {(practicingArchive[selectedCandidate.id] ?? []).length}</div></div>}<div className="mt-4 space-y-2">{outdoorSections.map((section) => <button key={section} onClick={() => setActiveOutdoorSection(section)} className={`w-full rounded-xl border p-3 text-left text-sm ${effectiveActiveOutdoorSection === section ? "border-slate-950 bg-slate-50" : "bg-white hover:bg-slate-50"}`}><div className="font-medium">{outdoorSectionTitle(section)}</div><div className="text-xs text-slate-500">{outdoorTotal(selectedCandidate.id, selectedCandidate.level, section)} / {outdoorMax(selectedCandidate.level, section)} {t("outdoor.points")}</div></button>)}</div></div><div className="lg:col-span-2"><h3 className="font-semibold">{t("outdoor.detail.title")}</h3><p className="mt-1 text-sm text-slate-600">{t("outdoor.detail.helper")}</p><div className="mt-4 space-y-3">{activeItems.map((item) => <div key={item.id} className="rounded-2xl border bg-white p-4"><div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between"><div><div className="font-mono text-xs text-slate-500">{item.id}</div><div className="font-medium">{item.text}</div>{item.notes && <div className="mt-2 whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs text-slate-600">{item.notes}</div>}</div><label className="text-sm font-medium md:w-36">{t("outdoor.pointsLabel")} / {item.max}<select value={outdoor[selectedCandidate.id]?.[item.id] ?? ""} onChange={(e) => updateOutdoor(item.id, e.target.value)} className="mt-1 w-full rounded-xl border bg-white p-2"><option value="">-</option>{outdoorHalfPointOptions(item.max).map((option) => <option key={option} value={option}>{formatHalfPointScore(option)}</option>)}</select></label></div><textarea value={outdoorNotes[selectedCandidate.id]?.[item.id] ?? ""} onChange={(e) => updateOutdoorNote(item.id, e.target.value)} placeholder={t("outdoor.examinerNotes")} className="mt-3 min-h-16 w-full rounded-xl border bg-white p-3 text-sm" /></div>)}</div><div className="mt-4 flex flex-wrap gap-2"><Button onClick={submitOutdoor} disabled={selectedMode === "unassigned"} className="rounded-2xl"><Lock className="mr-2 h-4 w-4" /> {t("outdoor.submit")}</Button><StatusPill tone={selectedMode === "primary" ? "good" : "default"}>{selectedMode === "primary" ? t("outdoor.mode.primary") : selectedMode === "secondary" ? t("outdoor.mode.secondary") : t("outdoor.mode.unassigned")}</StatusPill><StatusPill tone="warn">{t("outdoor.autosave")}</StatusPill></div><p className="mt-2 text-xs text-slate-500">{t("common.offlineRetry")}</p></div></div>;
+  return <div className="grid gap-4 lg:grid-cols-3"><div><Button onClick={() => setActivePage("landing")} variant="outline" className="mb-3 rounded-2xl">{t("outdoor.backToLanding")}</Button><h3 className="font-semibold">{t("outdoor.candidateBinding")}</h3><div className="mt-3 rounded-xl bg-slate-100 p-3 text-sm">{t("outdoor.activeRecord")}: <strong>{selectedCandidate.name}</strong><br />{t("outdoor.level")}: <strong>{selectedCandidate.level}</strong><br />{t("outdoor.total")}: <strong>{total}</strong> / {max}<br />{t("common.opened")}: {time?.openedAt || "-"}<br />{t("common.closed")}: {time?.closedAt || "-"}<br /><span className={isOutdoorFallback ? "text-amber-700" : "text-emerald-700"}>{isOutdoorFallback ? "Outdoor source: local data" : "Outdoor source: active Admin package"}</span></div>{selectedCandidate.level === "Practicing" && <div className="mt-3 rounded-xl border bg-white p-3 text-sm"><div className="font-semibold">{t("outdoor.paperArchive.title")}</div><p className="mt-1 text-slate-600">{t("outdoor.paperArchive.helper")}</p><Button onClick={archivePlan} variant="outline" className="mt-3 w-full rounded-2xl">{t("outdoor.paperArchive.button")}</Button><div className="mt-2 text-xs text-slate-500">{t("outdoor.paperArchive.photos")}: {(practicingArchive[selectedCandidate.id] ?? []).length}</div></div>}<div className="mt-4 space-y-2">{outdoorSections.map((section) => <button key={section} onClick={() => setActiveOutdoorSection(section)} className={`w-full rounded-xl border p-3 text-left text-sm ${effectiveActiveOutdoorSection === section ? "border-slate-950 bg-slate-50" : "bg-white hover:bg-slate-50"}`}><div className="font-medium">{outdoorSectionTitle(section)}</div><div className="text-xs text-slate-500">{outdoorTotal(selectedCandidate.id, selectedCandidate.level, section)} / {outdoorMax(selectedCandidate.level, section)} {t("outdoor.points")}</div></button>)}</div></div><div className="lg:col-span-2"><h3 className="font-semibold">{t("outdoor.detail.title")}</h3><p className="mt-1 text-sm text-slate-600">{t("outdoor.detail.helper")}</p><div className="mt-4 space-y-3">{activeItems.map((item) => <div key={item.id} className="rounded-2xl border bg-white p-4"><div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between"><div><div className="font-mono text-xs text-slate-500">{item.id}</div><div className="font-medium">{item.text}</div>{item.notes && <div className="mt-2 whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs text-slate-600">{item.notes}</div>}</div><label className="text-sm font-medium md:w-36">{t("outdoor.pointsLabel")} / {item.max}<select value={outdoor[selectedCandidate.id]?.[item.id] ?? ""} onChange={(e) => updateOutdoor(item.id, e.target.value)} className="mt-1 w-full rounded-xl border bg-white p-2"><option value="">-</option>{outdoorHalfPointOptions(item.max).map((option) => <option key={option} value={option}>{formatHalfPointScore(option)}</option>)}</select></label></div><textarea value={outdoorNotes[selectedCandidate.id]?.[item.id] ?? ""} onChange={(e) => updateOutdoorNote(item.id, e.target.value)} placeholder={t("outdoor.examinerNotes")} className="mt-3 min-h-16 w-full rounded-xl border bg-white p-3 text-sm" /></div>)}</div><div className="mt-4 flex flex-wrap gap-2"><Button onClick={submitOutdoor} disabled={selectedMode === "unassigned"} className="rounded-2xl"><Lock className="mr-2 h-4 w-4" /> {t("outdoor.submit")}</Button><StatusPill tone={selectedMode === "primary" ? "good" : "default"}>{selectedMode === "primary" ? t("outdoor.mode.primary") : selectedMode === "secondary" ? t("outdoor.mode.secondary") : t("outdoor.mode.unassigned")}</StatusPill><StatusPill tone="warn">{t("outdoor.autosave")}</StatusPill></div><p className="mt-2 text-xs text-slate-500">{t("common.offlineRetry")}</p></div></div>;
 }
 
 function ScoringCard({ selectedCandidate, scoring, updateScore, generateEvaluation, lastEvaluation, loadEvaluationPreview, evaluationPreview, evaluationLoading, evaluationError, downloadDraftExport, exportLoading, exportError, variants, testBank, testResponses, reportDrafts, t }) {

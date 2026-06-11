@@ -1,7 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-/* Field tablet mode inspired by vetmap prototype */
+/* Field tablet mode */
 .field-tablet-shell {
   min-height: 100vh;
   background: #eef3ef;

@@ -2,28 +2,28 @@ function tr(t, key, fallback) {
   return typeof t === "function" ? t(key) : fallback;
 }
 
-export function PilotSmokeTestChecklist({ StatusPill, t }) {
+export function OperationalSmokeTestChecklist({ StatusPill, t }) {
   const items = [
-    ["pilot.smoke.loadCentre", "Load Centre Setup"],
-    ["pilot.smoke.candidatesExaminers", "Confirm candidates and examiners are visible"],
-    ["pilot.smoke.testPackage", "Import or verify test package"],
-    ["pilot.smoke.candidateQr", "Open Candidate QR and save a written test answer"],
-    ["pilot.smoke.report", "For Consulting Candidate, save report draft and pilot/archive placeholder"],
-    ["pilot.smoke.examinerQr", "Open Examiner QR and save outdoor score and note"],
-    ["pilot.smoke.preview", "Load Evaluation Preview"],
-    ["pilot.smoke.draftExport", "Download Draft Export"],
-    ["pilot.smoke.auditExport", "Download Centre Audit Package"],
+    ["session.check.loadCentre", "Load Centre Setup"],
+    ["session.check.candidatesExaminers", "Confirm candidates and examiners are visible"],
+    ["session.check.testPackage", "Import or verify test package"],
+    ["session.check.candidateQr", "Open Candidate QR and save a written test answer"],
+    ["session.check.report", "For Consulting Candidate, save report draft and archive record"],
+    ["session.check.examinerQr", "Open Examiner QR and save outdoor score and note"],
+    ["session.check.preview", "Load Evaluation Preview"],
+    ["session.check.draftExport", "Download Draft Export"],
+    ["session.check.auditExport", "Download Centre Audit Package"],
   ];
 
   return (
     <div className="mt-4 rounded-2xl border bg-white p-4">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold">{tr(t, "pilot.smoke.title", "Pilot smoke-test checklist")}</h3>
-          <p className="mt-1 text-sm text-slate-600">{tr(t, "pilot.smoke.subtitle", "Use this after each deploy to confirm the pilot workflow still works.")}</p>
+          <h3 className="font-semibold">{tr(t, "session.check.title", "Operational verification checklist")}</h3>
+          <p className="mt-1 text-sm text-slate-600">{tr(t, "session.check.subtitle", "Use this after each deployment to confirm the examination workflow works.")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <StatusPill>Pilot</StatusPill>
+          <StatusPill>Session</StatusPill>
           <StatusPill>Manual</StatusPill>
         </div>
       </div>
@@ -36,7 +36,7 @@ export function PilotSmokeTestChecklist({ StatusPill, t }) {
   );
 }
 
-export function PilotReleaseNotesPanel({ StatusPill, t }) {
+export function ReleaseNotesPanel({ StatusPill, t }) {
   const available = [
     "Centre Setup save/load",
     "Candidate and Examiner QR workspaces",
@@ -48,7 +48,7 @@ export function PilotReleaseNotesPanel({ StatusPill, t }) {
     "Evaluation Preview",
     "Draft Export",
     "Centre Audit Package",
-    "Pilot workflow dashboard and smoke-test checklist",
+    "Exam workflow dashboard and verification checklist",
   ];
 
   const notIncluded = [
@@ -65,20 +65,20 @@ export function PilotReleaseNotesPanel({ StatusPill, t }) {
     <div className="mt-4 rounded-2xl border bg-white p-4">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold">{tr(t, "pilot.release.title", "Pilot release notes")}</h3>
-          <p className="mt-1 text-sm text-slate-600">{tr(t, "pilot.release.subtitle", "This panel describes the pilot prototype scope. It is not the official VETcert certification output.")}</p>
+          <h3 className="font-semibold">{tr(t, "release.title", "Release notes")}</h3>
+          <p className="mt-1 text-sm text-slate-600">{tr(t, "release.subtitle", "This panel summarizes the current examination workflow scope.")}</p>
         </div>
-        <StatusPill>Pilot scope</StatusPill>
+        <StatusPill>Release scope</StatusPill>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <div>
-          <h4 className="mb-2 text-sm font-semibold">{tr(t, "pilot.release.available", "Available in this pilot")}</h4>
+          <h4 className="mb-2 text-sm font-semibold">{tr(t, "release.available", "Available")}</h4>
           <div className="space-y-2">
             {available.map((item) => <div key={item} className="rounded-xl bg-slate-100 p-2 text-sm text-slate-700">{item}</div>)}
           </div>
         </div>
         <div>
-          <h4 className="mb-2 text-sm font-semibold">{tr(t, "pilot.release.notIncluded", "Not included yet")}</h4>
+          <h4 className="mb-2 text-sm font-semibold">{tr(t, "release.notIncluded", "Pending configuration")}</h4>
           <div className="space-y-2">
             {notIncluded.map((item) => <div key={item} className="rounded-xl bg-amber-50 p-2 text-sm text-amber-950">{item}</div>)}
           </div>
@@ -93,7 +93,7 @@ export function CandidateQuickHelp({ t }) {
     ["help.candidate.qr", "Scan your personal Candidate QR issued by the Centre."],
     ["help.candidate.identity", "Confirm your identity before opening sections."],
     ["help.candidate.autosave", "Written test answers autosave to the sync queue."],
-    ["help.candidate.photos", "Consulting report photo entries are pilot/archive placeholders, not real uploads yet."],
+    ["help.candidate.photos", "Consulting report photo entries are archive records, stored as examination records."],
     ["help.candidate.ask", "If something looks wrong, ask Centre staff before final submit."],
   ];
 
