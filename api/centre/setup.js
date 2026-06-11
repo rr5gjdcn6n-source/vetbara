@@ -177,6 +177,8 @@ function normaliseTestPackage(body, existingPackage) {
   const hasTestPackageData = Array.isArray(source.availableVariants)
     || Object.prototype.hasOwnProperty.call(source, "variants")
     || Object.prototype.hasOwnProperty.call(source, "testBank")
+    || Object.prototype.hasOwnProperty.call(source, "outdoorItemsByLevel")
+    || Object.prototype.hasOwnProperty.call(source, "activeAdminPackageMeta")
     || Object.prototype.hasOwnProperty.call(source, "testImportSummary")
     || Object.prototype.hasOwnProperty.call(source, "summary");
 
@@ -188,12 +190,16 @@ function normaliseTestPackage(body, existingPackage) {
     : Array.isArray(previous.availableVariants) ? previous.availableVariants : [];
   const variants = objectPayload(source.variants ?? previous.variants);
   const testBank = objectPayload(source.testBank ?? previous.testBank);
+  const outdoorItemsByLevel = objectPayload(source.outdoorItemsByLevel ?? previous.outdoorItemsByLevel);
+  const activeAdminPackageMeta = objectPayload(source.activeAdminPackageMeta ?? previous.activeAdminPackageMeta);
   const summary = source.summary ?? source.testImportSummary ?? previous.summary ?? null;
 
   return {
     availableVariants,
     variants,
     testBank,
+    outdoorItemsByLevel,
+    activeAdminPackageMeta,
     importedAt: source.importedAt || previous.importedAt || new Date().toISOString(),
     summary,
   };
