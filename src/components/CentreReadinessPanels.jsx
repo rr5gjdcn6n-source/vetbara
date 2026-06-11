@@ -12,17 +12,17 @@ export function CentreValidationSummary({ issues, StatusPill, t }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="font-semibold">{tr(t, "centre.validation.title", "Centre Setup checks")}</h3>
-          <p className="mt-1 text-slate-600">{tr(t, "centre.validation.helper", "Errors should be fixed before distributing QR links. Warnings can be reviewed during pilot preparation.")}</p>
+          <p className="mt-1 text-slate-600">{tr(t, "centre.validation.helper", "Errors should be fixed before distributing QR links. Warnings should be reviewed before opening the exam session.")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <StatusPill tone={errorCount ? "bad" : "good"}>{errorCount ? tr(t, "centre.validation.action", "Action required before pilot smoke test") : tr(t, "centre.validation.ready", "Ready for pilot smoke test")}</StatusPill>
+          <StatusPill tone={errorCount ? "bad" : "good"}>{errorCount ? tr(t, "centre.validation.action", "Action required before exam session check") : tr(t, "centre.validation.ready", "Ready for exam session check")}</StatusPill>
           <StatusPill>{issues.length} validation issue(s)</StatusPill>
           <StatusPill tone={errorCount ? "bad" : "default"}>{errorCount} error(s)</StatusPill>
           <StatusPill tone={warningCount ? "warn" : "default"}>{warningCount} warning(s)</StatusPill>
         </div>
       </div>
       {sortedIssues.length === 0 ? (
-        <div className="mt-3 rounded-xl bg-emerald-50 p-3 text-emerald-900">{tr(t, "centre.validation.empty", "No validation issues. Setup is ready for pilot smoke test.")}</div>
+        <div className="mt-3 rounded-xl bg-emerald-50 p-3 text-emerald-900">{tr(t, "centre.validation.empty", "No validation issues. Setup is ready for the exam session.")}</div>
       ) : (
         <div className="mt-3 space-y-2">
           {sortedIssues.map((issue, index) => (
@@ -36,25 +36,25 @@ export function CentreValidationSummary({ issues, StatusPill, t }) {
   );
 }
 
-export function PilotReadinessGuardrails({ centreValidationIssues, centreSetupDirty, testImportSummary, dataMode, StatusPill, t }) {
+export function OperationalReadinessChecks({ centreValidationIssues, centreSetupDirty, testImportSummary, dataMode, StatusPill, t }) {
   const warnings = [
     ...(centreValidationIssues.some((issue) => issue.severity === "error") ? [tr(t, "centre.guardrails.validation", "Fix validation errors before distributing QR links.")] : []),
     ...(centreSetupDirty ? [tr(t, "centre.guardrails.unsaved", "Save Centre Setup before distributing QR links.")] : []),
-    ...(!testImportSummary ? [tr(t, "centre.guardrails.testPackage", "Import/select a test package before written test pilot runs.")] : []),
-    ...(dataMode === "demo" ? [tr(t, "centre.guardrails.backend", "Load backend Centre Setup before pilot testing with real users.")] : []),
+    ...(!testImportSummary ? [tr(t, "centre.guardrails.testPackage", "Import/select a test package before opening the written test.")] : []),
+    ...(dataMode === "demo" ? [tr(t, "centre.guardrails.backend", "Load saved Centre Setup before opening the exam session.")] : []),
   ];
 
   return (
     <div className="mt-4 rounded-2xl border bg-white p-4 text-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold">{tr(t, "centre.guardrails.title", "Pilot readiness guardrails")}</h3>
-          <p className="mt-1 text-slate-600">{tr(t, "centre.guardrails.helper", "These guardrails do not block demo testing, but they should be resolved before a real pilot run.")}</p>
+          <h3 className="font-semibold">{tr(t, "centre.guardrails.title", "Operational readiness checks")}</h3>
+          <p className="mt-1 text-slate-600">{tr(t, "centre.guardrails.helper", "These checks should be resolved before opening the exam session.")}</p>
         </div>
         <StatusPill tone={warnings.length ? "warn" : "good"}>{warnings.length ? `${warnings.length} warning(s)` : "ready"}</StatusPill>
       </div>
       {warnings.length === 0 ? (
-        <div className="mt-3 rounded-xl bg-emerald-50 p-3 text-emerald-900">{tr(t, "centre.guardrails.ready", "Pilot readiness looks good.")}</div>
+        <div className="mt-3 rounded-xl bg-emerald-50 p-3 text-emerald-900">{tr(t, "centre.guardrails.ready", "Operational readiness looks good.")}</div>
       ) : (
         <div className="mt-3 space-y-2">
           {warnings.map((warning) => <div key={warning} className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950">{warning}</div>)}
@@ -64,13 +64,13 @@ export function PilotReadinessGuardrails({ centreValidationIssues, centreSetupDi
   );
 }
 
-export function PilotRunSummary({ centreValidationIssues, centreSetupDirty, testImportSummary, dataMode, StatusPill, t }) {
+export function ExamRunSummary({ centreValidationIssues, centreSetupDirty, testImportSummary, dataMode, StatusPill, t }) {
   const hasValidationErrors = centreValidationIssues.some((issue) => issue.severity === "error");
   const qrDistributionReady = dataMode === "backend" && !centreSetupDirty && !hasValidationErrors && Boolean(testImportSummary);
   const rows = [
-    [tr(t, "centre.run.dataMode", "Data mode"), dataMode === "backend" ? tr(t, "centre.run.backend", "backend-loaded pilot data") : tr(t, "centre.run.demo", "demo fallback data"), dataMode === "backend" ? "good" : "warn"],
+    [tr(t, "centre.run.dataMode", "Data mode"), dataMode === "backend" ? tr(t, "centre.run.backend", "Centre-loaded exam data") : tr(t, "centre.run.demo", "local session data"), dataMode === "backend" ? "good" : "warn"],
     [tr(t, "centre.run.setup", "Centre Setup"), centreSetupDirty ? tr(t, "centre.run.unsaved", "Unsaved local changes") : tr(t, "centre.run.saved", "Saved / no local changes"), centreSetupDirty ? "warn" : "good"],
-    [tr(t, "centre.run.validation", "Validation"), hasValidationErrors ? tr(t, "centre.validation.action", "Action required before pilot smoke test") : tr(t, "centre.validation.ready", "Ready for pilot smoke test"), hasValidationErrors ? "bad" : "good"],
+    [tr(t, "centre.run.validation", "Validation"), hasValidationErrors ? tr(t, "centre.validation.action", "Action required before exam session check") : tr(t, "centre.validation.ready", "Ready for exam session check"), hasValidationErrors ? "bad" : "good"],
     [tr(t, "centre.run.testPackage", "Test package"), testImportSummary ? tr(t, "centre.run.imported", "Imported") : tr(t, "centre.run.missing", "Missing"), testImportSummary ? "good" : "warn"],
     [tr(t, "centre.run.qrDistribution", "QR distribution"), qrDistributionReady ? tr(t, "centre.run.qrReady", "Ready after setup is saved and backend-loaded") : tr(t, "centre.run.review", "Review guardrails"), qrDistributionReady ? "good" : "warn"],
   ];
@@ -79,7 +79,7 @@ export function PilotRunSummary({ centreValidationIssues, centreSetupDirty, test
     <div className="mt-4 rounded-2xl border bg-white p-4 text-sm">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold">{tr(t, "centre.run.title", "Pilot run summary")}</h3>
+          <h3 className="font-semibold">{tr(t, "centre.run.title", "Exam session summary")}</h3>
           <p className="mt-1 text-slate-600">{tr(t, "centre.run.helper", "Use this summary before sharing Candidate or Examiner QR links.")}</p>
         </div>
         <StatusPill tone={qrDistributionReady ? "good" : "warn"}>{qrDistributionReady ? "ready" : "review"}</StatusPill>
@@ -114,9 +114,9 @@ export function CentreNetworkReadinessChecklist({ StatusPill, t }) {
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="font-semibold">{tr(t, "centre.network.title", "Network readiness checklist")}</h3>
-          <p className="mt-1 text-sm text-slate-600">{tr(t, "centre.network.helper", "Use this before distributing Candidate QR and Examiner QR links during a pilot session.")}</p>
+          <p className="mt-1 text-sm text-slate-600">{tr(t, "centre.network.helper", "Use this before distributing Candidate QR and Examiner QR links during the exam session.")}</p>
         </div>
-        <StatusPill>LAN pilot</StatusPill>
+        <StatusPill>LAN session</StatusPill>
       </div>
       <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
         {items.map(([key, fallback]) => (
